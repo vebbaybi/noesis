@@ -1,0 +1,18 @@
+NOESIS operations note
+======================
+
+This file intentionally contains no credentials.
+
+Runtime secrets belong in a local `.env` file or a deployment secret manager.
+Credentials that were previously stored here must be considered exposed and
+rotated before production use.
+
+Layer order:
+
+core models and config
+-> infrastructure utilities, logging, errors, storage
+-> integrations and clients
+-> cognition and memory
+-> host services and workers
+-> API and platform adapters
+-> runner

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noesis-agent"
+version = "0.1.0"
+description = "NOESIS multi-platform podcast and spaces agent for X and Discord"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115.0,<1.0.0",
+  "uvicorn[standard]>=0.30.0,<1.0.0",
+  "pydantic>=2.8.0,<3.0.0",
+  "pydantic-settings>=2.4.0,<3.0.0",
+  "httpx>=0.27.0,<1.0.0",
+  "openai>=1.40.0,<3.0.0",
+  "python-dotenv>=1.0.1,<2.0.0",
+  "py-cord[voice]>=2.7.0,<3.0.0",
+  "tweepy>=4.14.0,<5.0.0",
+  "tenacity>=9.0.0,<10.0.0",
+  "faster-whisper>=1.0.3",
+  "pyannote.audio>=3.1.1",
+  "networkx>=3.2.1",
+  "numpy>=1.26.4",
+  "tldextract>=5.1.2",
+  "psutil>=5.9.8",
+  "feedgen>=1.0.0",
+  "sounddevice>=0.4.6",
+  "webrtcvad>=2.0.10",
+  "PyYAML>=6.0,<7.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9.0",
+  "pytest-asyncio>=0.23,<1.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

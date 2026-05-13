@@ -1,0 +1,347 @@
+IMPLEMENTED HYBRID BRAIN LAYER
+==============================
+
+src/noesis_agent/brain/
+- __init__                    # package exports for the NOESIS brain
+- nlp_engine.py                  # local NLP: intent detection, keyword extraction, finance/web3 entity tagging, humor/risk signals
+- adaptive_policy.py             # RL-inspired local policy learner with persisted reward updates
+- finance_brain.py               # crypto/web3 reasoning with glossary grounding and risk framing
+- humor_engine.py                # humor style control with safe boundaries for live rooms
+- voice_profiles.py              # local voice profile store, sample ingest, and training-readiness tracking
+- service.py                     # hybrid orchestration layer that combines local brain signals with API-backed generation
+
+HYBRID ML / DL / RL / NLP STACK
+===============================
+
+- ML: local adaptive style scoring, hybrid retrieval scoring, finance/web3 heuristic reasoning
+- DL: existing repo pipelines for Whisper, diarization, and OpenAI-backed generation/TTS
+- RL: reward-updated style policy persisted under the local NOESIS store
+- NLP: local intent classification, keyword extraction, risk detection, humor detection, and finance entity extraction
+- Hybrid mode: NOESIS now builds local brain context first, then uses API generation when available, with a fully local fallback brain reply when APIs are offline
+- Voice training base: NOESIS now supports voice profiles, sample ingest, pacing/humor preferences, and readiness checks for voice-training datasets
+
+NOESIS/
+├── src/
+│   └── noesis_agent/
+│       ├── __init__.py                                 #tag package root
+│       ├── version.py                                  #tag package version and build metadata
+│       │
+│       ├── api/                                        #tag external HTTP control surface
+│       │   ├── __init__.py                             #tag api package init
+│       │   ├── app.py                                  #tag FastAPI application bootstrap
+│       │   ├── dependencies.py                         #tag shared FastAPI dependency providers
+│       │   ├── middleware.py                           #tag request middleware, auth, tracing, timing
+│       │   ├── routes/                                 #tag API endpoint modules
+│       │   │   ├── __init__.py                         #tag routes package init
+│       │   │   ├── health.py                           #tag health and readiness endpoints
+│       │   │   ├── sessions.py                         #tag session lifecycle endpoints
+│       │   │   ├── platforms.py                        #tag platform control endpoints
+│       │   │   ├── commands.py                         #tag command execution endpoints
+│       │   │   ├── media.py                            #tag media upload, transcript, recording endpoints
+│       │   │   └── admin.py                            #tag administrative and diagnostics endpoints
+│       │   └── websockets/                             #tag realtime control channels
+│       │       ├── __init__.py                         #tag websockets package init
+│       │       └── session_stream.py                   #tag live session event streaming
+│       │
+│       ├── clients/                                    #tag outbound integrations and SDK wrappers
+│       │   ├── __init__.py                             #tag clients package init
+│       │   ├── discord_bot.py                          #tag Discord bot and gateway client
+│       │   ├── openai_client.py                        #tag LLM, realtime, transcription, TTS client
+│       │   ├── x_client.py                             #tag X API and Spaces client
+│       │   ├── youtube_client.py                       #tag YouTube live and content interaction client
+│       │   ├── spotify_client.py                       #tag podcast publishing and metadata client
+│       │   ├── rss_client.py                           #tag RSS feed publish and sync client
+│       │   ├── obs_client.py                           #tag OBS control for recording and live production
+│       │   ├── stream_client.py                        #tag generic streaming transport wrapper
+│       │   ├── whisper_client.py                       #tag speech to text provider abstraction
+│       │   ├── tts_client.py                           #tag text to speech provider abstraction
+│       │   ├── vector_store_client.py                  #tag vector database adapter
+│       │   └── storage_client.py                       #tag blob storage wrapper for media and artifacts
+│       │
+│       ├── commands/                                   #tag command ingestion and dispatch
+│       │   ├── __init__.py                             #tag commands package init
+│       │   ├── handler.py                              #tag central command dispatcher
+│       │   ├── registry.py                             #tag command registration and discovery
+│       │   ├── processors.py                           #tag command implementations
+│       │   ├── parser.py                               #tag natural language to command intent parsing
+│       │   ├── validators.py                           #tag payload validation before execution
+│       │   └── permissions.py                          #tag role and platform permission checks
+│       │
+│       ├── config/                                     #tag configuration and environment definitions
+│       │   ├── __init__.py                             #tag config package init
+│       │   ├── settings.py                             #tag typed runtime settings
+│       │   ├── defaults.py                             #tag default fallback config values
+│       │   ├── profiles.py                             #tag environment and deployment profiles
+│       │   ├── feature_flags.py                        #tag toggles for experimental agent capabilities
+│       │   ├── prompts.yaml                            #tag static prompt templates and persona fragments
+│       │   ├── pentagon.json                           #tag encrypted sensitive runtime overrides
+│       │   ├── schema.py                               #tag pydantic config schemas (split from settings)
+│       │   ├── secrets.py                              #tag encrypted secrets loader / keyring
+│       │   ├── loader.py                               #tag multi-source config merging
+│       │   ├── watcher.py                              #tag file watcher for hot-reload
+│       │   └── validators.py                           #tag cross-field config validators
+│       │
+│       ├── core/                                       #tag agent runtime kernel
+│       │   ├── __init__.py                             #tag core package init
+│       │   ├── orchestrator.py                         #tag central runtime coordinator
+│       │   ├── runtime.py                              #tag active runtime state machine
+│       │   ├── lifecycle.py                            #tag startup and shutdown sequencing
+│       │   ├── shutdown.py                             #tag graceful shutdown management
+│       │   ├── bootstrap.py                            #tag dependency wiring and system bootstrapping
+│       │   ├── event_bus.py                            #tag internal pub sub event bus
+│       │   ├── task_manager.py                         #tag async task supervision and cancellation
+│       │   ├── state_manager.py                        #tag shared mutable runtime state control
+│       │   └── supervisor.py                           #tag fault isolation and service restarts
+│       │
+│       ├── cognition/                                  #tag higher order agent reasoning layer
+│       │   ├── __init__.py                             #tag cognition package init
+│       │   ├── conversation_manager.py                 #tag live conversation state tracking
+│       │   ├── topic_graph.py                          #tag topic transitions and thread continuity
+│       │   ├── decision_engine.py                      #tag decides when to speak, wait, summarize, pivot
+│       │   ├── response_planner.py                     #tag builds response strategy before generation
+│       │   ├── interruption_manager.py                 #tag manages turn taking and overlap handling
+│       │   ├── cohost_manager.py                       #tag behavior logic for co host mode
+│       │   ├── guest_mode.py                           #tag behavior logic for guest appearance mode
+│       │   ├── solo_host_mode.py                       #tag behavior logic for solo host mode
+│       │   ├── persona_engine.py                       #tag tone, identity, conversational style shaping
+│       │   ├── audience_awareness.py                   #tag adapts based on crowd energy and engagement
+│       │   ├── summarizer.py                           #tag rolling and final discussion summaries
+│       │   └── fact_guard.py                           #tag confidence checks and hallucination reduction
+│       │
+│       ├── audio/                                      #tag realtime audio ingestion and synthesis
+│       │   ├── __init__.py                             #tag audio package init
+│       │   ├── input_stream.py                         #tag microphone or platform audio capture
+│       │   ├── output_stream.py                        #tag voice output streaming
+│       │   ├── mixer.py                                #tag mixed channel audio composition
+│       │   ├── vad.py                                  #tag voice activity detection
+│       │   ├── diarization.py                          #tag speaker separation and identification
+│       │   ├── transcription.py                        #tag realtime speech to text pipeline
+│       │   ├── tts_pipeline.py                         #tag text to speech pipeline orchestration
+│       │   ├── prosody.py                              #tag speech pacing, pause, emphasis controls
+│       │   ├── soundboard.py                           #tag jingles, intro stingers, transition audio
+│       │   ├── noise_reduction.py                      #tag cleanup for live audio streams
+│       │   └── recording.py                            #tag audio recording and segmentation
+│       │
+│       ├── media/                                      #tag podcast and content production tooling
+│       │   ├── __init__.py                             #tag media package init
+│       │   ├── episode_builder.py                      #tag builds final episode package
+│       │   ├── show_notes.py                           #tag auto generated show notes
+│       │   ├── transcript_formatter.py                 #tag cleaned transcript generation
+│       │   ├── clip_extractor.py                       #tag highlight clip generation
+│       │   ├── title_generator.py                      #tag episode title suggestions
+│       │   ├── description_generator.py                #tag podcast description and summaries
+│       │   ├── chapterizer.py                          #tag chapter markers and timestamps
+│       │   ├── thumbnail_prompts.py                    #tag thumbnail prompt generation
+│       │   └── publishing_manifest.py                  #tag export package for downstream publishing
+│       │
+│       ├── memory/                                     #tag long term and working memory systems
+│       │   ├── __init__.py                             #tag memory package init
+│       │   ├── working_memory.py                       #tag short lived active conversation memory
+│       │   ├── episodic_memory.py                      #tag past sessions and interactions memory
+│       │   ├── guest_memory.py                         #tag remembers guests, bios, prior interactions
+│       │   ├── audience_memory.py                      #tag tracks repeat participants and audience context
+│       │   ├── semantic_memory.py                      #tag persistent indexed knowledge storage
+│       │   ├── retrieval.py                            #tag retrieval logic for contextual recall
+│       │   ├── memory_indexer.py                       #tag embnoesisngs and indexing pipeline
+│       │   └── memory_cleaner.py                       #tag pruning, TTL, and archive logic
+│       │
+│       ├── knowledge/                                  #tag research and context acquisition layer
+│       │   ├── __init__.py                             #tag knowledge package init
+│       │   ├── researcher.py                           #tag pre episode topic research orchestration
+│       │   ├── briefing_builder.py                     #tag guest and topic briefing pack generation
+│       │   ├── news_monitor.py                         #tag live topic and trend monitoring
+│       │   ├── source_ranker.py                        #tag source trust and relevance scoring
+│       │   ├── citation_manager.py                     #tag source references for grounded responses
+│       │   └── trend_detector.py                       #tag detects topic momentum across platforms
+│       │
+│       ├── moderation/                                 #tag safety and live room moderation
+│       │   ├── __init__.py                             #tag moderation package init
+│       │   ├── room_moderator.py                       #tag live room moderation orchestrator
+│       │   ├── abuse_detector.py                       #tag detects abusive or toxic input
+│       │   ├── spam_detector.py                        #tag spam and repeated content filtering
+│       │   ├── interruption_policy.py                  #tag rules for cutting in or waiting
+│       │   ├── speaker_queue.py                        #tag queue logic for who speaks next
+│       │   ├── mute_policy.py                          #tag mute or restriction decisions
+│       │   └── compliance.py                           #tag policy checks for recordings and broadcasting
+│       │
+│       ├── monitors/                                   #tag inbound monitoring workers
+│       │   ├── __init__.py                             #tag monitors package init
+│       │   ├── x_mentions.py                           #tag X mention monitoring
+│       │   ├── discord_events.py                       #tag Discord message and event monitoring
+│       │   ├── live_session_monitor.py                 #tag active room and session health watcher
+│       │   ├── guest_watch.py                          #tag guest join leave and hand raise monitoring
+│       │   └── system_watch.py                         #tag runtime metrics and fault monitors
+│       │
+│       ├── platforms/                                  #tag platform specific interaction layer
+│       │   ├── __init__.py                             #tag platforms package init
+│       │   ├── base.py                                 #tag abstract platform adapter contract
+│       │   ├── discord_space.py                        #tag Discord stage or voice session adapter
+│       │   ├── x_space.py                              #tag X Spaces adapter
+│       │   ├── youtube_live.py                         #tag YouTube live adapter
+│       │   ├── spotify_podcast.py                      #tag Spotify distribution adapter
+│       │   ├── rss_feed.py                             #tag RSS feed publishing adapter
+│       │   ├── obs_adapter.py                          #tag OBS scene and recording control
+│       │   └── web_room.py                             #tag browser based room adapter for custom live rooms
+│       │
+│       ├── scheduling/                                 #tag session timing and automation
+│       │   ├── __init__.py                             #tag scheduling package init
+│       │   ├── scheduler.py                            #tag recording and live event scheduler
+│       │   ├── calendar_sync.py                        #tag guest calendar sync and availability checks
+│       │   ├── reminders.py                            #tag reminders for hosts, guests, production events
+│       │   ├── runbook.py                              #tag show flow timing and stage cues
+│       │   └── countdowns.py                           #tag time to go live and segment countdown tracking
+│       │
+│       ├── services/                                   #tag application business services
+│       │   ├── __init__.py                             #tag services package init
+│       │   ├── api_server.py                           #tag API server startup and management
+│       │   ├── background.py                           #tag background service management
+│       │   ├── container.py                            #tag dependency container
+│       │   ├── host_service.py                         #tag host level orchestration services
+│       │   ├── planner_service.py                      #tag planning and agenda generation
+│       │   ├── platform_service.py                     #tag platform session orchestration
+│       │   ├── prompts.py                              #tag prompt construction helpers
+│       │   ├── publisher_service.py                    #tag publishing episodes and posts
+│       │   ├── session_service.py                      #tag session creation, state, teardown
+│       │   ├── social_service.py                       #tag social posting, listener engagement
+│       │   ├── summary_service.py                      #tag summaries, recap, post session reports
+│       │   ├── research_service.py                     #tag pre show research workflows
+│       │   ├── moderation_service.py                   #tag moderation execution and escalation
+│       │   ├── analytics_service.py                    #tag listener and performance analytics
+│       │   ├── recording_service.py                    #tag media recording and storage workflows
+│       │   ├── voice_service.py                        #tag TTS voice session management
+│       │   └── memory_service.py                       #tag memory persistence and retrieval service
+│       │
+│       ├── models/                                     #tag pydantic schemas and domain models
+│       │   ├── __init__.py                             #tag models package init
+│       │   ├── schemas.py                              #tag shared API and runtime schemas (base classes, pagination, errors)
+│       │   ├── session.py                              #tag session domain models (state, participants, room metadata)
+│       │   ├── guest.py                                #tag guest profile models (speaker base, expertise, prior appearances)
+│       │   ├── transcript.py                           #tag transcript and utterance models (utterance, diarization, web3 mentions)
+│       │   ├── media.py                                #tag media asset models (recordings, clips, publishing manifest)
+│       │   ├── command.py                              #tag command payload models (intent, parsed args, execution result)
+│       │   ├── analytics.py                            #tag analytics and metrics models (engagement, token usage, latency)
+│       │   ├── events.py                               #tag internal event bus payload models
+│       │   ├── persona.py                              #tag persona profile models (tones, lengths, selection rules)
+│       │   ├── web3.py                                 #tag web3 domain models (chains, tokens, nfts, transactions)
+│       │   ├── voice.py                                #tag voice profile models (samples, training status, prosody)
+│       │   ├── moderation.py                           #tag safety and room moderation models (decisions, queues, reports)
+│       │   ├── knowledge.py                            #tag research and briefing models (briefs, sources, trends)
+│       │   ├── memory.py                               #tag memory entry models (episodic, semantic, guest memory)
+│       │   ├── platforms.py                            #tag platform-specific payloads (Discord, X, YouTube live)
+│       │   ├── auth.py                                 #tag authentication and api key models (if API requires auth)
+│       │   └── types.py                                #tag shared enums and type aliases (Platform, Environment, ChainId)
+│       │
+│       ├── pipelines/                                  #tag reusable runtime pipelines
+│       │   ├── __init__.py                             #tag pipelines package init
+│       │   ├── pre_show.py                             #tag guest prep and pre show orchestration
+│       │   ├── live_show.py                            #tag active live hosting pipeline
+│       │   ├── post_show.py                            #tag post production and publishing pipeline
+│       │   ├── guest_join.py                           #tag guest onboarding sequence
+│       │   ├── cohost_sync.py                          #tag co host synchronization pipeline
+│       │   └── emergency_recovery.py                   #tag stream failure fallback pipeline
+│       │
+│       ├── prompts/                                    #tag structured prompt assets
+│       │   ├── __init__.py                             #tag prompts package init
+│       │   ├── host_prompts.py                         #tag solo host prompt templates
+│       │   ├── cohost_prompts.py                       #tag co host prompt templates
+│       │   ├── guest_prompts.py                        #tag guest appearance prompt templates
+│       │   ├── moderation_prompts.py                   #tag moderation prompt templates
+│       │   ├── research_prompts.py                     #tag research and briefing prompt templates
+│       │   └── postproduction_prompts.py               #tag summaries, titles, notes prompt templates
+│       │
+│       ├── store/                                      #tag persistence layer
+│       │   ├── __init__.py                             #tag store package init
+│       │   ├── json_store.py                           #tag JSON backed lightweight store
+│       │   ├── session_store.py                        #tag session persistence abstraction
+│       │   ├── transcript_store.py                     #tag transcript persistence
+│       │   ├── guest_store.py                          #tag guest records persistence
+│       │   ├── media_store.py                          #tag media asset metadata persistence
+│       │   └── cache_store.py                          #tag transient runtime cache
+│       │
+│       ├── telemetry/                                  #tag observability and diagnostics
+│       │   ├── __init__.py                             #tag telemetry package init
+│       │   ├── metrics.py                              #tag counters, histograms, gauges
+│       │   ├── tracing.py                              #tag distributed tracing integration
+│       │   ├── healthcheck.py                          #tag subsystem health inspection
+│       │   ├── audit.py                                #tag action audit trail logging
+│       │   └── diagnostics.py                          #tag live debug and system diagnostics
+│       │
+│       ├── utils/                                      #tag cross cutting helper utilities
+│       │   ├── __init__.py                             #tag utils package init
+│       │   ├── constants.py                            #tag shared constants and enums
+│       │   ├── decorators.py                           #tag reusable decorators for retries, timing, guards
+│       │   ├── noesislogger.py                           #tag structured NOESIS logger implementation
+│       │   ├── errors.py                               #tag custom exception hierarchy
+│       │   ├── logging.py                              #tag logging bootstrap and config helpers
+│       │   ├── retry.py                                #tag retry strategies and backoff utilities
+│       │   ├── timing.py                               #tag timing helpers and duration measurement
+│       │   ├── validators.py                           #tag generic runtime validation helpers
+│       │   ├── helpers.py                              #tag common helper functions
+│       │   ├── ids.py                                  #tag deterministic and random ID generators
+│       │   ├── serialization.py                        #tag JSON and object serialization helpers
+│       │   ├── text.py                                 #tag text normalization and cleanup helpers
+│       │   ├── files.py                                #tag filesystem helpers
+│       │   └── concurrency.py                          #tag async and thread safety helpers
+│       │
+│       └── runner.py                                   #tag package local runtime entry module
+│
+├── tests/                                              #tag test suite root
+│   ├── __init__.py                                     #tag tests package init
+│   ├── conftest.py                                     #tag pytest fixtures and shared setup
+│   ├── unit/                                           #tag isolated unit tests
+│   │   ├── test_commands.py                            #tag command layer tests
+│   │   ├── test_cognition.py                           #tag reasoning and planning tests
+│   │   ├── test_audio.py                               #tag audio pipeline tests
+│   │   ├── test_memory.py                              #tag memory subsystem tests
+│   │   ├── test_services.py                            #tag service layer tests
+│   │   └── test_utils.py                               #tag utility layer tests
+│   ├── integration/                                    #tag cross module integration tests
+│   │   ├── test_api.py                                 #tag API integration tests
+│   │   ├── test_platforms.py                           #tag platform adapter tests
+│   │   ├── test_live_pipeline.py                       #tag end to end live hosting tests
+│   │   └── test_publishing.py                          #tag publishing workflow tests
+│   └── fixtures/                                       #tag test assets and mock payloads
+│       ├── transcripts/                                #tag transcript fixture data
+│       ├── sessions/                                   #tag session fixture data
+│       └── audio/                                      #tag audio fixture samples
+│
+├── scripts/                                            #tag development and deployment scripts
+│   ├── bootstrap_env.py                                #tag local environment bootstrap
+│   ├── seed_store.py                                   #tag seed development data
+│   ├── run_dev.py                                      #tag local development launcher
+│   ├── backfill_embnoesisngs.py                          #tag populate vector indexes from stored data
+│   └── export_episode.py                               #tag manual episode export utility
+│
+├── docs/                                               #tag project documentation
+│   ├── architecture/                                   #tag design and system architecture docs
+│   │   ├── runtime.md                                  #tag runtime architecture
+│   │   ├── live_hosting.md                             #tag podcast and space hosting design
+│   │   ├── platform_adapters.md                        #tag adapter patterns and platform support
+│   │   ├── memory.md                                   #tag memory and retrieval design
+│   │   └── moderation.md                               #tag moderation logic and guardrails
+│   ├── api/                                            #tag API documentation
+│   ├── prompts/                                        #tag prompt strategy docs
+│   ├── operations/                                     #tag deployment and operations guides
+│   └── changelogs/                                     #tag release notes and feature evolution
+│
+├── deployments/                                        #tag deployment assets
+│   ├── docker/                                         #tag containerization assets
+│   │   ├── Dockerfile                                  #tag runtime container image definition
+│   │   └── docker-compose.yml                          #tag local orchestration config
+│   ├── systemd/                                        #tag Linux service definitions
+│   └── cloud/                                          #tag cloud specific deployment manifests
+│
+├── data/                                               #tag local runtime data and artifacts
+│   ├── sessions/                                       #tag stored session state
+│   ├── transcripts/                                    #tag transcript outputs
+│   ├── recordings/                                     #tag audio recordings
+│   ├── clips/                                          #tag extracted media clips
+│   ├── memory/                                         #tag serialized memory snapshots
+│   └── cache/                                          #tag transient cached data
+│
+├── .env.example                                        #tag environment variable template
+├── .gitignore                                          #tag git ignore rules
+├── pyproject.toml                                      #tag project metadata and dependencies
+├── README.md                                           #tag root project overview
+├── runner.py                                           #tag clean root entry point
+└── LICENSE                                             #tag license file
