@@ -23,9 +23,20 @@ from noesis_agent.models.schemas import (
     TranscriptEvent,
     XPostRequest,
 )
+from noesis_agent.models.mentions import MentionEvent, MentionResponse
 from noesis_agent.services.container import get_container
 
 app = FastAPI(title="NOESIS Agent", version="0.1.0")
+
+
+@app.post("/events/mention/test", response_model=MentionResponse)
+async def test_mention(payload: MentionEvent) -> MentionResponse:
+    return await get_container().mentions.handle(payload, dry_run=True)
+
+
+@app.post("/respond/dry-run", response_model=MentionResponse)
+async def respond_dry_run(payload: MentionEvent) -> MentionResponse:
+    return await get_container().mentions.handle(payload, dry_run=True)
 
 
 @app.get("/health")

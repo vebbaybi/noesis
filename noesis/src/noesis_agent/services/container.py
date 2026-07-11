@@ -21,6 +21,7 @@ class ServiceContainer:
         from noesis_agent.services.host_decision_service import HostDecisionService
         from noesis_agent.services.live_session_service import LiveSessionService
         from noesis_agent.services.memory_service import MemoryService
+        from noesis_agent.services.mention_service import MentionService
         from noesis_agent.services.output_adapters import DiscordOutputAdapter, LocalTextOutputAdapter
         from noesis_agent.services.output_router import OutputRouter
         from noesis_agent.services.post_show_service import PostShowArtifactService
@@ -38,6 +39,7 @@ class ServiceContainer:
         self.store = JsonStore(settings.data_dir)
 
         self.openai = OpenAIService()
+        self.mentions = MentionService(self.openai, noesis_name=settings.noesis_name)
         self.x_client = XClient()
         self.cognition = CognitionProviderRouter.from_settings(self.openai, settings)
 
