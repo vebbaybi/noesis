@@ -56,3 +56,16 @@ class MentionResponse(BaseModel):
     live_send_attempted: bool = False
     missing_capabilities: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MentionDispatchResult(BaseModel):
+    platform: str
+    event_id: str
+    intent: MentionIntent
+    response_status: str
+    response_text: str = ""
+    send_mode: Literal["dry_run", "disabled", "attempted", "failed", "succeeded"]
+    send_attempted: bool = False
+    send_result: str = ""
+    disabled_reason: str = ""
+    missing_credentials: list[str] = Field(default_factory=list)

@@ -2,9 +2,8 @@
 
 ## Now
 
-- Wire real Discord and X events to `MentionService`. Evidence: both clients/monitors exist but the normalized path is API-only. Required: platform normalizers and mocked event-shape tests. Acceptance: known mention/reply payloads produce the same results as `/respond/dry-run` without network calls.
-- Make outbound mention delivery explicit. Evidence: output adapters and X posting exist separately. Required: a dispatcher that defaults to dry-run and reports send receipt/error truthfully. Acceptance: mocks prove no send without credentials and exact send metadata with a configured fake.
-- Correct stale README claims. Evidence: live X/audio claims exceed verified behavior. Required: replace the pasted architecture essay with links to audit/runbook. Acceptance: every capability is labeled local, credential-gated, partial, or verified.
+- Bind normalized callbacks in the production runner. Evidence: Discord/X normalizers, callback surfaces, and dispatcher are tested, but controlled live account wiring is not verified. Required: explicit runner configuration and adapter receipt handling. Acceptance: sandbox-account checks prove one inbound mention produces at most one outbound reply.
+- Verify outbound mention delivery. Evidence: dispatcher defaults to dry-run and reports disabled/missing credentials, but no live credentials were supplied. Required: controlled Discord/X accounts and manual permission checks. Acceptance: exact platform receipt IDs are recorded without secrets.
 
 ## Next
 

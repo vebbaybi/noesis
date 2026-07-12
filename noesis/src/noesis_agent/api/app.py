@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from noesis_agent.models.schemas import (
     EpisodePlan,
@@ -23,10 +24,18 @@ from noesis_agent.models.schemas import (
     TranscriptEvent,
     XPostRequest,
 )
-from noesis_agent.models.mentions import MentionEvent, MentionResponse
+from noesis_agent.models.mentions import MentionDispatchResult, MentionEvent, MentionResponse
+from noesis_agent.platforms.mention_normalizers import normalize_discord_message, normalize_x_mention
 from noesis_agent.services.container import get_container
 
 app = FastAPI(title="NOESIS Agent", version="0.1.0")
+
+
+class RawMentionTestRequest(BaseModel):
+    platform: str
+    event: dict = Field(default_factory=dict)
+    bot_user_id: str | None = None
+    bot_name_or_handle: str = "Noesis"
 
 
 @app.post("/events/mention/test", response_model=MentionResponse)
@@ -37,6 +46,20 @@ async def test_mention(payload: MentionEvent) -> MentionResponse:
 @app.post("/respond/dry-run", response_model=MentionResponse)
 async def respond_dry_run(payload: MentionEvent) -> MentionResponse:
     return await get_container().mentions.handle(payload, dry_run=True)
+
+
+@app.post("/events/mention/raw/test", response_model=MentionDispatchResult)
+async def test_raw_mention(payload: RawMentionTestRequest) -> MentionDispatchResult:
+    if payload.platform == "discord":
+        event = normalize_discord_message(
+            payload.event, bot_user_id=payload.bot_user_id,
+            bot_name=payload.bot_name_or_handle,
+        )
+    elif payload.platform == "x":
+        event = normalize_x_mention(payload.event, handle=payload.bot_name_or_handle)
+    else:
+        raise HTTPException(status_code=400, detail="platform must be 'discord' or 'x'")
+    return await get_container().mention_dispatcher.dispatch(event, live=False)
 
 
 @app.get("/health")

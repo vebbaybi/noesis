@@ -13,10 +13,12 @@ from noesis_agent.utils.noesislogger import get_noesis_logger
 
 logger = get_noesis_logger(__name__)
 CommandCallback = Callable[[str, dict[str, str]], Awaitable[str | None]]
+MentionCallback = Callable[[Any], Awaitable[Any]]
 
 
 class NoesisDiscordBot(discord.Bot):
-    def __init__(self, command_callback: CommandCallback, live_agent_getter: Callable[[], Any] | None = None) -> None:
+    def __init__(self, command_callback: CommandCallback, live_agent_getter: Callable[[], Any] | None = None,
+                 mention_callback: MentionCallback | None = None) -> None:
         intents = discord.Intents.default()
         intents.guilds = True
         intents.messages = True
@@ -26,6 +28,7 @@ class NoesisDiscordBot(discord.Bot):
 
         self.command_callback = command_callback
         self.live_agent_getter = live_agent_getter
+        self.mention_callback = mention_callback
         self._commands_registered = False
         self._register_commands()
 
@@ -205,6 +208,16 @@ class NoesisDiscordBot(discord.Bot):
 
         prompt = self._extract_text_prompt(message)
         if not prompt or not await self._ensure_allowed_message_channel(message):
+            return
+
+        if self.mention_callback is not None:
+            from noesis_agent.platforms.mention_normalizers import normalize_discord_message
+
+            event = normalize_discord_message(
+                message, bot_user_id=self.user.id if self.user is not None else None,
+                bot_name=settings.noesis_name,
+            )
+            await self.mention_callback(event)
             return
 
         channel = getattr(message, "channel", None)
