@@ -29,7 +29,7 @@ Dry-run mention test:
 curl -X POST http://127.0.0.1:8000/respond/dry-run -H "Content-Type: application/json" -d "{\"event_id\":\"demo-1\",\"platform\":\"local\",\"text\":\"@Noesis summarize this\",\"parent_text\":\"The supplied text to summarize.\"}"
 ```
 
-`POST /events/mention/test` is an equivalent explicit test route. Responses identify intent, whether Noesis would respond, responder, reason, and missing capability. They do not send to a platform.
+`POST /events/mention/test` is an equivalent explicit test route. `POST /events/mention/raw/test` accepts a `platform` of `discord` or `x` plus a raw-shaped `event` dictionary and exercises normalization and outbound dry-run dispatch. Responses identify intent, send mode, reason, and missing capability. These endpoints never send to a platform.
 
 ## Environment
 

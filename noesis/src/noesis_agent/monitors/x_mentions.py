@@ -170,6 +170,16 @@ class XMentionsMonitor:
             self._running = False
             self.logger.info("X mentions monitor stopped")
 
+    async def run_normalized(self, callback: Callable[[Any], Awaitable[None] | None], *, handle: str) -> None:
+        from noesis_agent.platforms.mention_normalizers import normalize_x_mention
+
+        async def normalized_callback(payload: dict[str, Any]) -> None:
+            result = callback(normalize_x_mention(payload, handle=handle))
+            if inspect.isawaitable(result):
+                await result
+
+        await self.run(normalized_callback)
+
     def stop(self) -> None:
         self._running = False
         self._stop_event.set()
