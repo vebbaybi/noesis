@@ -9,7 +9,7 @@ Noesis is an experimental Python agent/control plane for local session workflows
 - Platform-neutral mention handling supports deterministic local fallback, intent detection, duplicate suppression, and honest limitation messages.
 - `POST /respond/dry-run`, `POST /events/mention/test`, and `POST /events/mention/raw/test` test local, Discord-shaped, and X-shaped mentions without sending externally.
 
-Discord, X, and OpenAI behavior is credential-gated. Their import, disabled state, normalizers, and mocked/dry-run behavior are tested; live Discord/X delivery and live OpenAI output have not been verified in this repository environment. Audio, transcription, diarization, realtime audio, and X Spaces support are partial or optional and must not be treated as proven live capabilities.
+Discord, X, and OpenAI behavior is credential-gated. The Discord runtime mention pipeline is wired and mock-tested, but live replies are disabled by default and have not been verified against Discord. X live delivery and live OpenAI output are also unverified. Audio, transcription, diarization, realtime audio, and X Spaces support are partial or optional and must not be treated as proven live capabilities.
 
 ## Local setup
 

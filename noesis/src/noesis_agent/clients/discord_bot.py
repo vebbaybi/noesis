@@ -13,7 +13,7 @@ from noesis_agent.utils.noesislogger import get_noesis_logger
 
 logger = get_noesis_logger(__name__)
 CommandCallback = Callable[[str, dict[str, str]], Awaitable[str | None]]
-MentionCallback = Callable[[Any], Awaitable[Any]]
+MentionCallback = Callable[[Any, Any], Awaitable[Any]]
 
 
 class NoesisDiscordBot(discord.Bot):
@@ -217,7 +217,7 @@ class NoesisDiscordBot(discord.Bot):
                 message, bot_user_id=self.user.id if self.user is not None else None,
                 bot_name=settings.noesis_name,
             )
-            await self.mention_callback(event)
+            await self.mention_callback(event, message)
             return
 
         channel = getattr(message, "channel", None)

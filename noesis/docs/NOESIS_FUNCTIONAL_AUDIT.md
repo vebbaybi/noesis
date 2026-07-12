@@ -17,7 +17,7 @@ The API includes health/state, planning, session lifecycle, transcript, host-tur
 | Mention normalization/decision/intent/reply | Implemented and tested locally | `MentionEvent`, `MentionService`, and both dry-run endpoints. |
 | Local response fallback | Implemented and tested | Deterministic, limitation-aware responses; no network calls. |
 | OpenAI text generation | Implemented, credential-gated, not live-verified | Async client is created only with `OPENAI_API_KEY`; failures fall back in mention handling. |
-| Discord bot/chat | Implemented, credential-gated, not live-verified | py-cord bot has an optional normalized mention callback; object/dict event normalization and dry-run dispatch are tested. No credential was supplied. |
+| Discord bot/chat | Runtime-wired and mock-tested, credential-gated, not live-verified | The production background manager binds the bot callback through normalization, `MentionService`, dispatcher, and the original message reply target. Two explicit live-send flags default false. No credential was supplied. |
 | X reads/writes | Implemented, credential-gated, not live-verified | Tweepy monitor has a normalized callback path; dictionary event normalization and dry-run dispatch are tested. Live permissions/account access were not supplied. |
 | X Spaces hosting | Partial/not verified | Models/adapters exist, but X API does not provide the complete live audio hosting path used by the product concept. |
 | Audio transcription | Partial, optional | Faster Whisper can be loaded lazily with audio extras. Hardware/models were not verified. |
@@ -37,12 +37,12 @@ Potential dead/stale surface remains broad: numerous small audio, platform, know
 
 ## Verification and limits
 
-Latest verification on 2026-07-11: `python -m compileall -q src` passed and `python -m pytest -q` passed all 57 tests in 18.33 seconds. No live calls were made and no secrets were available, so Discord delivery, X delivery/reads, OpenAI output quality, audio devices/models, and external rate limits cannot be claimed as verified.
+Latest verification on 2026-07-12: `python -m compileall -q src` passed and `python -m pytest -q` passed all 61 tests in 23.90 seconds. FastAPI import and `/health` smoke checks passed. No live calls were made and no secrets were available, so Discord delivery, X delivery/reads, OpenAI output quality, audio devices/models, and external rate limits cannot be claimed as verified.
 
 ## Fix now versus roadmap
 
 Fixed now: shared mention models/service, honest deterministic fallback, duplicate/empty/unaddressed handling, provider-failure fallback, dry-run API endpoints, and behavior tests.
 
-Next implementation work: bind the optional normalized callbacks in the production runner and verify platform-specific senders in controlled accounts; persist deduplication where multiple workers are used; improve context acquisition within platform permission limits; and replace the realtime configuration endpoint with a documented real flow or rename it.
+Next implementation work: complete the controlled private-channel Discord checklist; persist deduplication where multiple workers are used; improve context acquisition within platform permission limits; and defer X live wiring until the Discord milestone is manually verified.
 
 Roadmap work: production credential validation/deployment, live adapter integration tests in controlled accounts, durable queue/rate limits, observability, and optional audio validation on supported hosts.
