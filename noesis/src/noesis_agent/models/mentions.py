@@ -69,3 +69,5 @@ class MentionDispatchResult(BaseModel):
     send_result: str = ""
     disabled_reason: str = ""
     missing_credentials: list[str] = Field(default_factory=list)
+    sent_message_id: str | None = None
+    error_category: str | None = None

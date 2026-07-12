@@ -2,8 +2,8 @@
 
 ## Now
 
-- Bind normalized callbacks in the production runner. Evidence: Discord/X normalizers, callback surfaces, and dispatcher are tested, but controlled live account wiring is not verified. Required: explicit runner configuration and adapter receipt handling. Acceptance: sandbox-account checks prove one inbound mention produces at most one outbound reply.
-- Verify outbound mention delivery. Evidence: dispatcher defaults to dry-run and reports disabled/missing credentials, but no live credentials were supplied. Required: controlled Discord/X accounts and manual permission checks. Acceptance: exact platform receipt IDs are recorded without secrets.
+- Verify the runtime-wired Discord mention pipeline in a private channel. Evidence: the production background manager now binds normalization, response, dispatch, and original-message reply; mocks prove one-send and duplicate behavior. Required: explicit live flags, private bot credentials, permissions, and manual receipt checks. Acceptance: one mention yields exactly one reply and sanitized logs record source/delivery IDs.
+- Keep X live delivery deferred until Discord verification passes. Evidence: X normalization/dry-run exists, but this milestone intentionally does not wire live sending. Required later: controlled X account, permissions, rate-limit review, and receipt validation.
 
 ## Next
 

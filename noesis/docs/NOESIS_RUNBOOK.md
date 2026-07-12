@@ -39,6 +39,25 @@ Provider variables: `OPENAI_API_KEY` enables OpenAI text calls; `NOESIS_DEFAULT_
 
 Discord: enable with `NOESIS_ENABLE_DISCORD=true` and set `DISCORD_BOT_TOKEN`. Guild/voice/channel IDs constrain live behavior. `NOESIS_ENABLE_LIVE_AGENT`, auto-start variables, and cross-post flags should remain false until the bot permissions and channel IDs are verified.
 
+Discord mention replies require both `NOESIS_ENABLE_LIVE_MENTION_SEND=true` and `NOESIS_ENABLE_DISCORD_MENTION_SEND=true`. Both default to false. With either switch off, mentions may be normalized and processed, but the dispatcher reports a disabled state and does not call Discord. OpenAI remains optional; without it, the deterministic local responder is used.
+
+## Controlled Discord live test checklist
+
+Use a private test server and channel; do not begin with a public deployment.
+
+1. Create a private Discord test server/channel.
+2. Add the bot with permission to view the channel, read message history, and send/reply to messages. Enable the required message-content intent in the Discord developer portal.
+3. Set `NOESIS_ENABLE_DISCORD=true` and provide `DISCORD_BOT_TOKEN` in the uncommitted `.env` file.
+4. Restrict `DISCORD_ALLOWED_TEXT_CHANNEL_IDS` to the private test channel.
+5. Set `NOESIS_ENABLE_LIVE_MENTION_SEND=true` and `NOESIS_ENABLE_DISCORD_MENTION_SEND=true` explicitly.
+6. Run `python -m noesis_agent.runner`.
+7. Mention Noesis once and confirm exactly one reply.
+8. Confirm sanitized logs contain the source event ID, `succeeded`, and the Discord delivery receipt ID—never the token.
+9. Replay or inject the same message ID in a controlled test and confirm no second sender call. Ordinary Discord messages have unique IDs, so this check may require a fixture or gateway replay harness.
+10. Turn both live-send switches off after the test.
+
+Live Discord behavior remains unverified until this checklist succeeds. X live delivery is a later milestone.
+
 X: enable with `NOESIS_ENABLE_X=true`; writes require `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET`. `X_BEARER_TOKEN` supports applicable reads. `X_HANDLE` identifies the account. Keep cross-post disabled until a dry run is reviewed.
 
 Never commit `.env`. Live Discord/X/OpenAI behavior is credential- and permission-dependent and is not exercised by the local test suite.

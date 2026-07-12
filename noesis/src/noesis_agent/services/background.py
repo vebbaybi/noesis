@@ -45,6 +45,7 @@ class BackgroundServiceManager:
         self._discord_bot = NoesisDiscordBot(
             command_handler.handle,
             live_agent_getter=lambda: getattr(self.container, "live", None),
+            mention_callback=self._handle_discord_mention,
         )
         if hasattr(self.container, "bind_discord_client"):
             self.container.bind_discord_client(self._discord_bot)
@@ -54,6 +55,32 @@ class BackgroundServiceManager:
         )
         self._track_task(task)
         self.logger.info("Discord bot task launched")
+
+    async def _handle_discord_mention(self, event, message) -> None:
+        dispatcher = getattr(self.container, "mention_dispatcher", None)
+        if dispatcher is None:
+            self.logger.error("Discord mention dispatcher unavailable", extra={"event_id": event.event_id})
+            return
+
+        async def reply_sender(text: str):
+            return await message.reply(text, mention_author=False)
+
+        live = bool(
+            getattr(settings, "enable_live_mention_send", False)
+            and getattr(settings, "enable_discord_mention_send", False)
+        )
+        result = await dispatcher.dispatch(event, live=live, discord_sender=reply_sender)
+        self.logger.info(
+            "Discord mention processed",
+            extra={
+                "event_id": event.event_id,
+                "response_status": result.response_status,
+                "send_mode": result.send_mode,
+                "send_attempted": result.send_attempted,
+                "sent_message_id": result.sent_message_id,
+                "error_category": result.error_category,
+            },
+        )
 
     async def _start_live_agent(self) -> None:
         if not getattr(settings, "enable_live_agent", True):

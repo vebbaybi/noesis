@@ -21,6 +21,8 @@ class DisabledProvider:
 
 def disabled_settings(**overrides):
     values = {"NOESIS_ENABLE_DISCORD": False, "DISCORD_BOT_TOKEN": "",
+              "NOESIS_ENABLE_LIVE_MENTION_SEND": False,
+              "NOESIS_ENABLE_DISCORD_MENTION_SEND": False,
               "NOESIS_ENABLE_X": False, "X_API_KEY": "", "X_API_SECRET": "",
               "X_ACCESS_TOKEN": "", "X_ACCESS_TOKEN_SECRET": ""}
     values.update(overrides)
@@ -82,7 +84,9 @@ async def test_dispatcher_dry_run_never_sends() -> None:
 
 @pytest.mark.asyncio
 async def test_live_disabled_reports_missing_credentials_without_secrets() -> None:
-    dispatcher = MentionDispatcher(MentionService(DisabledProvider()), runtime_settings=disabled_settings())
+    dispatcher = MentionDispatcher(MentionService(DisabledProvider()), runtime_settings=disabled_settings(
+        NOESIS_ENABLE_LIVE_MENTION_SEND=True, NOESIS_ENABLE_DISCORD_MENTION_SEND=True,
+    ))
     discord = await dispatcher.dispatch(MentionEvent(event_id="d3", platform="discord",
         text="@Noesis explain this"), live=True)
     assert discord.send_mode == "disabled"
@@ -110,5 +114,6 @@ def test_raw_api_simulates_discord_and_x_without_live_send() -> None:
 
 def test_readme_states_live_integrations_are_unverified() -> None:
     text = open("README.md", encoding="utf-8").read().lower()
-    assert "live discord/x delivery" in text
-    assert "have not been verified" in text
+    assert "live replies are disabled by default" in text
+    assert "have not been verified against discord" in text
+    assert "x live delivery" in text and "unverified" in text

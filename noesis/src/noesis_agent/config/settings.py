@@ -76,6 +76,8 @@ class Settings(BaseSettings):
         alias="DISCORD_ALLOWED_TEXT_CHANNEL_IDS",
     )
     enable_discord: bool = Field(default=True, alias="NOESIS_ENABLE_DISCORD")
+    enable_live_mention_send: bool = Field(default=False, alias="NOESIS_ENABLE_LIVE_MENTION_SEND")
+    enable_discord_mention_send: bool = Field(default=False, alias="NOESIS_ENABLE_DISCORD_MENTION_SEND")
     enable_live_agent: bool = Field(default=True, alias="NOESIS_ENABLE_LIVE_AGENT")
     auto_start_live_session: bool = Field(default=False, alias="NOESIS_AUTO_START_LIVE_SESSION")
     auto_start_live_topic: str = Field(default="Open conversation", alias="NOESIS_AUTO_START_LIVE_TOPIC")
@@ -208,6 +210,12 @@ class Settings(BaseSettings):
                     message="Discord is enabled but no bot token is configured.",
                 )
             )
+
+        if self.enable_discord_mention_send and not self.enable_live_mention_send:
+            issues.append(SettingsIssue(
+                key="NOESIS_ENABLE_LIVE_MENTION_SEND", severity="warning",
+                message="Discord mention sending is enabled, but global live mention sending is disabled.",
+            ))
 
         if self.auto_start_live_session:
             if not self.enable_discord:
