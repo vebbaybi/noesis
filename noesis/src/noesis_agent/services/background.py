@@ -65,6 +65,11 @@ class BackgroundServiceManager:
         async def reply_sender(text: str):
             return await message.reply(text, mention_author=False)
 
+        context_tool = getattr(self.container, "discord_context_tool", None)
+        if context_tool is not None and context_tool.is_needed(event.text):
+            evidence = context_tool.inspect(event, message, authorized=True)
+            event.metadata["evidence"] = [evidence.safe_dict()]
+
         live = bool(
             getattr(settings, "enable_live_mention_send", False)
             and getattr(settings, "enable_discord_mention_send", False)

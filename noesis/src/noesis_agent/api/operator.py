@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from noesis_agent.config.settings import settings
 from noesis_agent.services.container import get_container
+from noesis_agent.models.mentions import MentionEvent
 
 
 router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 LOGO_PATH = PROJECT_ROOT / "logo" / "noesis_logo.png"
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+STARTED_AT = datetime.now(timezone.utc)
 
 
 def _require_local(request: Request) -> None:
@@ -35,16 +39,29 @@ def operator_logo(request: Request):
     return FileResponse(LOGO_PATH, media_type="image/png")
 
 
+@router.get("/operator/assets/logo.png", include_in_schema=False)
+def operator_logo_compat(request: Request):
+    return operator_logo(request)
+
+
 @router.get("/operator/status", include_in_schema=False)
 def operator_status(request: Request) -> dict:
     _require_local(request)
     health = get_container().is_healthy()
+    storage_available = settings.data_dir.exists()
+    storage_writable = storage_available and os.access(settings.data_dir, os.W_OK)
     issues = settings.validate_environment()
     return {
         "service": "noesis-agent",
         "runtime_profile": settings.runtime_profile.name,
-        "data_path": str(settings.data_dir),
+        "state": "degraded" if issues else "ready",
+        "uptime_seconds": max(0, int((datetime.now(timezone.utc) - STARTED_AT).total_seconds())),
+        "storage": {"label": "local_data", "configured": True,
+                    "available": storage_available, "writable": storage_writable},
         "providers": health.get("cognition", []),
+        "memory": get_container().memory.scoped.health(),
+        "local_model": {"state": "not_configured", "required": False,
+                        "hardware_profile": _hardware_profile()},
         "features": {
             "discord_enabled": settings.enable_discord,
             "discord_token_present": bool(settings.discord_bot_token),
@@ -64,6 +81,32 @@ def operator_status(request: Request) -> dict:
     }
 
 
+@router.post("/operator/cognition/inspect", include_in_schema=False)
+async def inspect_cognition(request: Request, event: MentionEvent) -> dict:
+    _require_local(request)
+    response = await get_container().mentions.handle(event, dry_run=True)
+    return {
+        "event_id": response.event_id,
+        "platform": response.platform,
+        "interpretation": response.metadata.get("local_interpretation", {}),
+        "response": {"status": response.status, "intent": response.intent,
+                     "responder": response.responder, "text": response.text,
+                     "limitations": response.missing_capabilities},
+    }
+
+
+def _hardware_profile() -> str:
+    memory_gib = 0.0
+    try:
+        import psutil
+        memory_gib = psutil.virtual_memory().total / 1024 ** 3
+    except Exception:
+        pass
+    if memory_gib < 8 or (os.cpu_count() or 1) <= 2:
+        return "deterministic_only"
+    return "cpu_compact" if memory_gib < 16 else "cpu_balanced"
+
+
 OPERATOR_HTML = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Noesis Operator</title><style>
@@ -76,7 +119,8 @@ textarea,select{width:100%;background:#050b1d;color:white;border:1px solid #3159
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#050b1d;padding:12px;border-radius:9px;min-height:70px}a{color:var(--cyan)}
 </style></head><body><main>
 <div class="brand"><img src="/operator/assets/noesis_logo.png" alt="The 1807 shark logo"><div><h1>Noesis Operator</h1><div class="muted">Local control and dry-run verification surface</div></div></div>
-<div class="grid"><section><h2>Runtime readiness</h2><pre id="status">Loading safe status…</pre><button onclick="loadStatus()">Refresh</button></section>
+<nav aria-label="Operator sections"><a href="#overview">Overview</a> · <a href="#cognition">Cognition</a> · <span class="muted">Models · Memory · Sources · Audit (read-only status; controls planned)</span></nav>
+<div class="grid"><section id="overview"><h2>Runtime readiness</h2><pre id="status">Loading safe status…</pre><button onclick="loadStatus()">Refresh</button></section>
 <section><h2>Mention dry run</h2><label for="platform">Platform shape</label><select id="platform"><option>local</option><option>discord</option><option>x</option></select>
 <label for="text">Message</label><textarea id="text" rows="5">@Noesis explain what you can do</textarea><button onclick="testMention()">Run dry test</button><pre id="result">No live message will be sent.</pre></section>
 <section><h2>Documentation</h2><p><a href="/docs">OpenAPI docs</a></p><p class="muted">Runbook, audit, and roadmap are repository files. Live-send controls are intentionally unavailable here.</p></section></div>

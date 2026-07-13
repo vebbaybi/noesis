@@ -36,10 +36,12 @@ class ServiceContainer:
         from noesis_agent.services.topic_planning_service import TopicPlanningService
         from noesis_agent.services.transcript_service import TranscriptService
         from noesis_agent.store.json_store import JsonStore
+        from noesis_agent.platforms.discord_tools import DiscordContextTool
 
         self.store = JsonStore(settings.data_dir)
 
         self.openai = OpenAIService()
+        self.discord_context_tool = DiscordContextTool()
         self.mentions = MentionService(self.openai, noesis_name=settings.noesis_name)
         self.x_client = XClient()
         self.mention_dispatcher = MentionDispatcher(

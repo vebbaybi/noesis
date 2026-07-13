@@ -9,6 +9,9 @@
 
 ## Next
 
+- Add an asynchronous memory command/orchestration boundary. Evidence: scoped SQLite persistence is implemented, but gateway events do not automatically write memories. Required: explicit remember/forget commands, sensitivity policy, bounded worker execution, and audit. Acceptance: authorized explicit facts persist without blocking platform loops or leaking scope.
+- Build a versioned local cognition evaluation dataset. Evidence: deterministic NLP emits confidence and limitations but has no measured accuracy baseline. Required: secret-free fixtures with expected intents, serious mode, tool selection, and unsupported-claim labels. Acceptance: reproducible metrics are reported without claiming model intelligence.
+
 - Durable deduplication and rate limiting. Evidence: current dedupe is process-local and monitors poll. Required: bounded persistent/shared store with expiry. Acceptance: duplicates are suppressed across restart/workers and users receive no spam burst.
 - Context retrieval within permissions. Evidence: models accept parent context but platform wiring does not fetch thread history. Required: adapter-specific bounded context fetch. Acceptance: responses cite only payload/fetched context and disclose unavailable history.
 - Add adapters through the shared conversation-scope contract. Evidence: Discord uses guild/channel/thread/parent, X uses conversation/reply IDs, while Slack and Teams use different thread/activity identifiers. Required: official adapter-specific authorization, normalization, sender, receipt, rate-limit, and fixture tests. Acceptance: cognition and responder code remain unchanged when a platform adapter is added.

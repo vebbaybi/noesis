@@ -4,16 +4,19 @@ import re
 from collections import OrderedDict
 
 from noesis_agent.models.mentions import MentionEvent, MentionIntent, MentionResponse
+from noesis_agent.cognition.local_nlp import LocalNLP
 
 
 class MentionService:
     """Platform-neutral, deterministic mention handling with optional LLM enhancement."""
 
-    def __init__(self, openai_service, *, noesis_name: str = "Noesis", duplicate_limit: int = 1000) -> None:
+    def __init__(self, openai_service, *, noesis_name: str = "Noesis", duplicate_limit: int = 1000,
+                 local_nlp: LocalNLP | None = None) -> None:
         self.openai = openai_service
         self.noesis_name = noesis_name
         self.duplicate_limit = duplicate_limit
         self._seen: OrderedDict[tuple[str, str], None] = OrderedDict()
+        self.local_nlp = local_nlp or LocalNLP()
 
     async def handle(self, event: MentionEvent, *, dry_run: bool = True) -> MentionResponse:
         event_key = (event.platform, event.event_id)
@@ -31,6 +34,17 @@ class MentionService:
         if not self._is_addressed(event):
             return self._result(event, "ignored", False, MentionIntent.UNCLEAR, reason="not_addressed_to_noesis")
 
+        interpretation = self.local_nlp.interpret(event.text)
+        event.metadata["local_interpretation"] = {
+            "language": interpretation.language,
+            "intent": interpretation.intent,
+            "confidence": interpretation.intent_confidence,
+            "dialogue_act": interpretation.dialogue_act,
+            "topics": interpretation.topics,
+            "sentiment": interpretation.sentiment,
+            "emotion": interpretation.emotion,
+            "limitations": list(interpretation.limitations),
+        }
         intent = self._classify(event.text)
         if intent is MentionIntent.CASUAL:
             return self._result(event, "ignored", False, intent, reason="casual_mention_without_task")
@@ -92,6 +106,12 @@ class MentionService:
 
     @staticmethod
     def _fallback(intent: MentionIntent, event: MentionEvent) -> str:
+        evidence = event.metadata.get("evidence") or []
+        if evidence:
+            facts = evidence[0].get("facts", {})
+            available = [f"{key.replace('_', ' ')}: {value}" for key, value in facts.items()]
+            if available:
+                return "Current authorized Discord context — " + "; ".join(available) + "."
         context = event.parent_text or ""
         if intent is MentionIntent.SUMMARIZE:
             if not context:
@@ -124,4 +144,6 @@ class MentionService:
         return MentionResponse(event_id=event.event_id, status=status, should_respond=should_respond,
                                intent=intent, text=text, responder=responder, reason=reason,
                                platform=event.platform, missing_capabilities=missing or [],
-                               metadata={"conversation_id": event.conversation_id, "channel_id": event.channel_id})
+                               metadata={"conversation_id": event.conversation_id, "channel_id": event.channel_id,
+                                         **({"local_interpretation": event.metadata["local_interpretation"]}
+                                            if "local_interpretation" in event.metadata else {})})

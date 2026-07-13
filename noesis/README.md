@@ -36,3 +36,8 @@ See the repository-grounded documentation:
 - [Runbook](docs/NOESIS_RUNBOOK.md)
 - [Roadmap seed](docs/NOESIS_ROADMAP_SEED.md)
 - [Operator GUI plan](docs/NOESIS_OPERATOR_GUI_PLAN.md)
+- [Architecture](docs/NOESIS_ARCHITECTURE.md)
+- [Local cognition](docs/NOESIS_LOCAL_COGNITION.md)
+- [Memory policy](docs/NOESIS_MEMORY_POLICY.md)
+- [JIT tools](docs/NOESIS_JIT_TOOLS.md)
+- [Security threat model](docs/NOESIS_SECURITY_THREAT_MODEL.md)

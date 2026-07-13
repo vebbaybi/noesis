@@ -13,6 +13,7 @@ from noesis_agent.memory import (
 )
 from noesis_agent.memory.memory_indexer import SENSITIVE_PATTERN
 from noesis_agent.store.guest_store import GuestStore
+from noesis_agent.memory.sqlite_memory import ScopedMemoryStore
 
 
 class MemoryService:
@@ -24,6 +25,7 @@ class MemoryService:
         self.guests = GuestMemory(GuestStore(data_dir))
         self.indexer = MemoryIndexer(self.semantic)
         self.retrieval = Retrieval(self.semantic, self.episodic)
+        self.scoped = ScopedMemoryStore(Path(data_dir) / "memory" / "noesis_memory.sqlite3")
 
     def index_transcript(self, session_id: str, transcript: str) -> list[str]:
         facts = self.indexer.index_transcript(transcript, session_id=session_id)
