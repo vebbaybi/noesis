@@ -222,11 +222,15 @@ class NoesisDiscordBot(discord.Bot):
         if getattr(getattr(message, "author", None), "bot", False):
             return
 
-        prompt = self._extract_text_prompt(message)
-        if not prompt:
-            return
         authorization = await self._ensure_allowed_message_channel(message)
         if not authorization.allowed:
+            return
+        prompt = self._extract_text_prompt(message)
+        context = authorization.context
+        observation_mode = settings.discord_observation_mode_for(
+            guild_id=context.guild_id, channel_id=context.current_channel_id,
+            thread_id=context.thread_id)
+        if not prompt and observation_mode in {"mentions_only", "disabled"}:
             return
 
         if self.mention_callback is not None:
@@ -237,6 +241,7 @@ class NoesisDiscordBot(discord.Bot):
                 bot_name=settings.noesis_name,
                 authorization=authorization,
             )
+            event.metadata["observation_mode"] = observation_mode
             await self.mention_callback(event, message)
             return
 

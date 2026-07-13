@@ -16,6 +16,9 @@ The API includes health/state, planning, session lifecycle, transcript, host-tur
 | Session/transcript/host workflows | Implemented locally | Existing services and API workflow tests. Persistent JSON data is local. |
 | Mention normalization/decision/intent/reply | Implemented and tested locally | `MentionEvent`, `MentionService`, and both dry-run endpoints. |
 | Operator UI | Implemented and tested locally | `/operator` provides safe status and dry-run testing; it is loopback-only and has no authentication claim or live controls. |
+| Deterministic local NLP | Implemented and offline-tested | Heuristic structured interpretation reports confidence and limitations; no trained-model accuracy claim. |
+| Scoped durable memory | Implemented and offline-tested | SQLite schema v1 supports restart persistence, strict scope filters, lexical retrieval, expiry, correction, and deletion. Automatic JSON migration and embeddings are not implemented. |
+| Discord JIT metadata | Implemented and offline-tested | Authorized current-event guild/channel/thread metadata only; no broad history or additional network fetch. |
 | Local response fallback | Implemented and tested | Deterministic, limitation-aware responses; no network calls. |
 | OpenAI text generation | Implemented, credential-gated, not live-verified | Async client is created only with `OPENAI_API_KEY`; failures fall back in mention handling. |
 | Discord bot/chat | Runtime-wired and mock-tested, credential-gated, not live-verified | The production background manager binds the bot callback through normalization, `MentionService`, dispatcher, and the original message reply target. Two explicit live-send flags default false. No credential was supplied. |

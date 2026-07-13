@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from noesis_agent.clients.discord_bot import NoesisDiscordBot
+from noesis_agent.config.settings import settings
 from noesis_agent.platforms.discord_authorization import authorize_discord_message
 from noesis_agent.platforms.mention_normalizers import normalize_discord_message
 from noesis_agent.services.mention_service import MentionService
@@ -115,3 +116,20 @@ async def test_duplicate_cache_is_bounded_and_platform_scoped() -> None:
 
 async def _async_value(value):
     return value
+
+
+@pytest.mark.asyncio
+async def test_authorized_unmentioned_message_reaches_ambient_callback_when_enabled(monkeypatch) -> None:
+    received = []
+    async def command_callback(command, payload): return "unused"
+    async def mention_callback(event, raw): received.append(event)
+    monkeypatch.setattr(settings, "memory_observation_mode", "observe_and_remember")
+    monkeypatch.setattr(settings, "discord_allowed_text_channel_ids", [100])
+    bot = NoesisDiscordBot(command_callback, mention_callback=mention_callback)
+    raw = message(FakeTextChannel(100), message_id=501)
+    raw.content = "Agreed. We are staying with SQLite for V1."
+    await bot.on_message(raw)
+    assert len(received) == 1
+    assert received[0].mentioned is False
+    assert received[0].metadata["observation_mode"] == "observe_and_remember"
+    await bot.close()

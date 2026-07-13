@@ -41,7 +41,7 @@ def root() -> RedirectResponse:
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> RedirectResponse:
-    return RedirectResponse(url="/operator/assets/noesis_logo.pn", status_code=307)
+    return RedirectResponse(url="/operator/assets/noesis_logo.png", status_code=307)
 
 
 class RawMentionTestRequest(BaseModel):
