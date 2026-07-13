@@ -14,6 +14,8 @@ from noesis_agent.memory import (
 from noesis_agent.memory.memory_indexer import SENSITIVE_PATTERN
 from noesis_agent.store.guest_store import GuestStore
 from noesis_agent.memory.sqlite_memory import ScopedMemoryStore
+from noesis_agent.memory.autonomous import AutonomousMemoryService
+from noesis_agent.config.settings import settings
 
 
 class MemoryService:
@@ -26,6 +28,16 @@ class MemoryService:
         self.indexer = MemoryIndexer(self.semantic)
         self.retrieval = Retrieval(self.semantic, self.episodic)
         self.scoped = ScopedMemoryStore(Path(data_dir) / "memory" / "noesis_memory.sqlite3")
+        self.autonomous = AutonomousMemoryService(
+            self.scoped, queue_size=settings.memory_queue_size,
+            worker_count=settings.memory_worker_count,
+            timeout=max(settings.memory_write_timeout_seconds, settings.memory_retrieval_timeout_seconds),
+            max_candidates=settings.memory_max_candidates_per_event,
+            confidence_threshold=settings.memory_confidence_threshold,
+            importance_threshold=settings.memory_importance_threshold,
+            actionability_threshold=settings.memory_actionability_threshold,
+            extraction_enabled=settings.memory_candidate_extraction_enabled,
+        )
 
     def index_transcript(self, session_id: str, transcript: str) -> list[str]:
         facts = self.indexer.index_transcript(transcript, session_id=session_id)

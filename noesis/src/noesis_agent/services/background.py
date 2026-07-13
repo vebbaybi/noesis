@@ -233,6 +233,10 @@ class BackgroundServiceManager:
                     )
 
         self._tasks.clear()
+        memory = getattr(getattr(self.container, "memory", None), "autonomous", None)
+        if memory is not None and hasattr(memory, "shutdown"):
+            await memory.shutdown()
+            self.logger.info("Autonomous memory executor closed")
         self._discord_bot = None
         self._x_monitor = None
         self._live_agent = None

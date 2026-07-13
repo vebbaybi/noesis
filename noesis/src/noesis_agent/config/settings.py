@@ -91,6 +91,35 @@ class Settings(BaseSettings):
     x_bearer_token: str = Field(default="", alias="X_BEARER_TOKEN")
     x_handle: str = Field(default="the1807xyz", alias="X_HANDLE")
     enable_x: bool = Field(default=True, alias="NOESIS_ENABLE_X")
+    memory_observation_mode: Literal["mentions_only", "observe_authorized", "observe_and_remember", "observe_and_moderate", "full_authorized_assistance", "disabled"] = Field(
+        default="mentions_only", alias="NOESIS_MEMORY_OBSERVATION_MODE")
+    discord_observation_overrides_raw: str = Field(default="{}", alias="NOESIS_DISCORD_OBSERVATION_OVERRIDES")
+    ambient_response_enabled: bool = Field(default=False, alias="NOESIS_AMBIENT_RESPONSE_ENABLED")
+    moderation_analysis_enabled: bool = Field(default=True, alias="NOESIS_MODERATION_ANALYSIS_ENABLED")
+    moderation_human_review_required: bool = Field(default=True, alias="NOESIS_MODERATION_HUMAN_REVIEW_REQUIRED")
+    ambient_response_cooldown_seconds: int = Field(default=60, ge=0, le=86400, alias="NOESIS_AMBIENT_RESPONSE_COOLDOWN_SECONDS")
+    autonomous_memory_enabled: bool = Field(default=True, alias="NOESIS_AUTONOMOUS_MEMORY_ENABLED")
+    memory_candidate_extraction_enabled: bool = Field(default=True, alias="NOESIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED")
+    memory_max_candidates_per_event: int = Field(default=4, ge=1, le=20, alias="NOESIS_MEMORY_MAX_CANDIDATES_PER_EVENT")
+    memory_working_limit: int = Field(default=50, ge=5, le=1000, alias="NOESIS_MEMORY_WORKING_LIMIT")
+    memory_persistent_threshold: float = Field(default=.7, ge=0, le=1, alias="NOESIS_MEMORY_PERSISTENT_THRESHOLD")
+    memory_actionability_threshold: float = Field(default=.7, ge=0, le=1, alias="NOESIS_MEMORY_ACTIONABILITY_THRESHOLD")
+    memory_importance_threshold: float = Field(default=.7, ge=0, le=1, alias="NOESIS_MEMORY_IMPORTANCE_THRESHOLD")
+    memory_confidence_threshold: float = Field(default=.7, ge=0, le=1, alias="NOESIS_MEMORY_CONFIDENCE_THRESHOLD")
+    memory_sensitivity_rejection_threshold: float = Field(default=.5, ge=0, le=1, alias="NOESIS_MEMORY_SENSITIVITY_REJECTION_THRESHOLD")
+    memory_default_retention_class: Literal["working", "project", "long_term"] = Field(default="project", alias="NOESIS_MEMORY_DEFAULT_RETENTION_CLASS")
+    memory_max_retrieval_count: int = Field(default=5, ge=1, le=20, alias="NOESIS_MEMORY_MAX_RETRIEVAL_COUNT")
+    memory_queue_size: int = Field(default=128, ge=1, le=4096, alias="NOESIS_MEMORY_QUEUE_SIZE")
+    memory_worker_count: int = Field(default=2, ge=1, le=8, alias="NOESIS_MEMORY_WORKER_COUNT")
+    memory_write_timeout_seconds: float = Field(default=3, ge=.1, le=30, alias="NOESIS_MEMORY_WRITE_TIMEOUT_SECONDS")
+    memory_retrieval_timeout_seconds: float = Field(default=3, ge=.1, le=30, alias="NOESIS_MEMORY_RETRIEVAL_TIMEOUT_SECONDS")
+    memory_operator_preview_limit: int = Field(default=6, ge=1, le=20, alias="NOESIS_MEMORY_OPERATOR_PREVIEW_LIMIT")
+    memory_candidate_hold_seconds: int = Field(default=300, ge=0, le=86400, alias="NOESIS_MEMORY_CANDIDATE_HOLD_SECONDS")
+    memory_community_vocabulary_decay_days: int = Field(default=90, ge=1, le=3650, alias="NOESIS_MEMORY_COMMUNITY_VOCABULARY_DECAY_DAYS")
+    memory_task_expiration_days: int = Field(default=365, ge=1, le=3650, alias="NOESIS_MEMORY_TASK_EXPIRATION_DAYS")
+    memory_contradiction_policy: Literal["supersede", "hold_for_review"] = Field(default="supersede", alias="NOESIS_MEMORY_CONTRADICTION_POLICY")
+    memory_audit_retention_days: int = Field(default=90, ge=1, le=3650, alias="NOESIS_MEMORY_AUDIT_RETENTION_DAYS")
+    memory_diagnostic_mode: bool = Field(default=False, alias="NOESIS_MEMORY_DIAGNOSTIC_MODE")
 
     primary_platform: str = Field(
         default=DEFAULT_PRIMARY_PLATFORM,
@@ -201,6 +230,28 @@ class Settings(BaseSettings):
     def validate_environment(self) -> list[SettingsIssue]:
         """Return runtime configuration issues without touching external services."""
         issues: list[SettingsIssue] = []
+        try:
+            overrides = json.loads(self.discord_observation_overrides_raw or "{}")
+            valid_modes = {"mentions_only", "observe_authorized", "observe_and_remember",
+                           "observe_and_moderate", "full_authorized_assistance", "disabled"}
+            if not isinstance(overrides, dict) or any(mode not in valid_modes for mode in overrides.values()):
+                raise ValueError
+        except (ValueError, TypeError, json.JSONDecodeError):
+            issues.append(SettingsIssue(
+                key="NOESIS_DISCORD_OBSERVATION_OVERRIDES", severity="error",
+                message="Discord observation overrides must be a JSON object whose values are valid observation modes.",
+            ))
+
+        if self.memory_observation_mode in {"observe_and_remember", "full_authorized_assistance"} and not self.autonomous_memory_enabled:
+            issues.append(SettingsIssue(
+                key="NOESIS_AUTONOMOUS_MEMORY_ENABLED", severity="error",
+                message="The selected observation mode requires autonomous memory to be enabled.",
+            ))
+        if self.ambient_response_enabled and self.memory_observation_mode != "full_authorized_assistance":
+            issues.append(SettingsIssue(
+                key="NOESIS_AMBIENT_RESPONSE_ENABLED", severity="error",
+                message="Ambient responses require full_authorized_assistance observation mode.",
+            ))
 
         if self.enable_discord and not self.discord_bot_token:
             issues.append(
@@ -274,6 +325,15 @@ class Settings(BaseSettings):
             )
 
         return issues
+
+    def discord_observation_mode_for(self, *, guild_id: object = None,
+                                     channel_id: object = None, thread_id: object = None) -> str:
+        try:
+            overrides = json.loads(self.discord_observation_overrides_raw or "{}")
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return self.memory_observation_mode
+        keys = [f"thread:{thread_id}", f"channel:{channel_id}", f"guild:{guild_id}"]
+        return next((str(overrides[key]) for key in keys if key in overrides), self.memory_observation_mode)
 
     def startup_errors(self) -> list[SettingsIssue]:
         return [issue for issue in self.validate_environment() if issue.severity == "error"]

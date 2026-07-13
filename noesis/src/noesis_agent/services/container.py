@@ -37,19 +37,29 @@ class ServiceContainer:
         from noesis_agent.services.transcript_service import TranscriptService
         from noesis_agent.store.json_store import JsonStore
         from noesis_agent.platforms.discord_tools import DiscordContextTool
+        from noesis_agent.cognition.capabilities import CapabilityRegistry
 
         self.store = JsonStore(settings.data_dir)
 
         self.openai = OpenAIService()
         self.discord_context_tool = DiscordContextTool()
-        self.mentions = MentionService(self.openai, noesis_name=settings.noesis_name)
+        catalogue = settings.project_root / "assets" / "users_request.md"
+        if not catalogue.is_file():
+            catalogue = settings.project_root.parent / "assets" / "users_request.md"
+        self.capabilities = CapabilityRegistry(catalogue)
         self.x_client = XClient()
-        self.mention_dispatcher = MentionDispatcher(
-            self.mentions, runtime_settings=settings, x_client=self.x_client
-        )
         self.cognition = CognitionProviderRouter.from_settings(self.openai, settings)
 
         self.memory = MemoryService(settings.data_dir)
+        self.mentions = MentionService(self.openai, noesis_name=settings.noesis_name,
+                                       autonomous_memory=self.memory.autonomous if settings.autonomous_memory_enabled else None,
+                                       observation_mode=settings.memory_observation_mode,
+                                       capability_registry=self.capabilities)
+        self.mentions.ambient_response_enabled = settings.ambient_response_enabled
+        self.mentions.moderation_analysis_enabled = settings.moderation_analysis_enabled
+        self.mention_dispatcher = MentionDispatcher(
+            self.mentions, runtime_settings=settings, x_client=self.x_client
+        )
         self.brain = BrainService(
             store=self.store,
             openai_service=self.openai,

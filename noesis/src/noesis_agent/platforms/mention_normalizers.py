@@ -88,7 +88,15 @@ def normalize_x_mention(payload: Any, *, handle: str = "Noesis") -> MentionEvent
         timestamp=_get(payload, "created_at") or datetime.now(timezone.utc),
         mentioned=bool(re.search(rf"(?i)@{re.escape(handle.lstrip('@'))}\b", text)),
         is_reply_to_noesis=bool(_get(payload, "is_reply_to_noesis", False)),
-        metadata={"reply_to_tweet_id": _get(payload, "in_reply_to_tweet_id")},
+        metadata={
+            "event_type": "reply" if _get(payload, "in_reply_to_tweet_id") else
+                          "quote" if _get(payload, "quoted_tweet_id") else
+                          "mention" if re.search(rf"(?i)@{re.escape(handle.lstrip('@'))}\b", text)
+                          else "public_post",
+            "reply_to_tweet_id": _get(payload, "in_reply_to_tweet_id"),
+            "quoted_tweet_id": _get(payload, "quoted_tweet_id"),
+            "referenced_post_ids": list(_get(payload, "referenced_post_ids", []) or []),
+        },
     )
 
 
