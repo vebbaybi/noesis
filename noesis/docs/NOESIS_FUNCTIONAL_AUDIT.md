@@ -15,6 +15,7 @@ The API includes health/state, planning, session lifecycle, transcript, host-tur
 | Import and local API | Implemented and tested | FastAPI app and `/health`; no credentials required. |
 | Session/transcript/host workflows | Implemented locally | Existing services and API workflow tests. Persistent JSON data is local. |
 | Mention normalization/decision/intent/reply | Implemented and tested locally | `MentionEvent`, `MentionService`, and both dry-run endpoints. |
+| Operator UI | Implemented and tested locally | `/operator` provides safe status and dry-run testing; it is loopback-only and has no authentication claim or live controls. |
 | Local response fallback | Implemented and tested | Deterministic, limitation-aware responses; no network calls. |
 | OpenAI text generation | Implemented, credential-gated, not live-verified | Async client is created only with `OPENAI_API_KEY`; failures fall back in mention handling. |
 | Discord bot/chat | Runtime-wired and mock-tested, credential-gated, not live-verified | The production background manager binds the bot callback through normalization, `MentionService`, dispatcher, and the original message reply target. Two explicit live-send flags default false. No credential was supplied. |
@@ -33,16 +34,18 @@ The README was replaced with a concise verified-status document. It labels Disco
 
 The normalized mention path was missing. It now detects explicit mentions/replies, classifies questions, explanation, summarization, project help, bugs, feature requests, contribution requests, casual mentions, and hostile/unclear input. It rejects duplicate/unaddressed events, limits payload sizes, uses supplied parent context only, reports missing provider capability, and never claims a live send. Duplicate protection is process-local and resets on restart.
 
+Discord channel authorization now distinguishes real `discord.Thread` instances from ordinary channels. Directly allowlisted channels pass; a confirmed thread may inherit only from its resolved allowlisted parent ID. The actual thread remains the conversation and response target. Rejections occur before normalized mention processing. Deduplication is bounded and keyed by platform plus event ID.
+
 Potential dead/stale surface remains broad: numerous small audio, platform, knowledge, scheduling, telemetry, and media modules have limited direct integration with the runtime. They should not be deleted without usage analysis. The untracked working-tree deletion `noesis/rump` predates this pass and was preserved.
 
 ## Verification and limits
 
-Latest verification on 2026-07-12: `python -m compileall -q src` passed and `python -m pytest -q` passed all 61 tests in 23.90 seconds. FastAPI import and `/health` smoke checks passed. No live calls were made and no secrets were available, so Discord delivery, X delivery/reads, OpenAI output quality, audio devices/models, and external rate limits cannot be claimed as verified.
+Latest verification on 2026-07-13: `python -m compileall -q src` passed and `python -m pytest -q` passed all 81 tests in 52.69 seconds. FastAPI import, `/health`, and `/operator` smoke checks passed. No live calls were made and no secrets were available, so Discord delivery, X delivery/reads, OpenAI output quality, audio devices/models, and external rate limits cannot be claimed as verified.
 
 ## Fix now versus roadmap
 
 Fixed now: shared mention models/service, honest deterministic fallback, duplicate/empty/unaddressed handling, provider-failure fallback, dry-run API endpoints, and behavior tests.
 
-Next implementation work: complete the controlled private-channel Discord checklist; persist deduplication where multiple workers are used; improve context acquisition within platform permission limits; and defer X live wiring until the Discord milestone is manually verified.
+Next implementation work: complete the controlled private-channel Discord/thread checklist; add safe audit persistence before building the operator event viewer; improve bounded context acquisition within platform permission limits; and add new platform adapters only through the normalized event/dispatch contracts.
 
 Roadmap work: production credential validation/deployment, live adapter integration tests in controlled accounts, durable queue/rate limits, observability, and optional audio validation on supported hosts.

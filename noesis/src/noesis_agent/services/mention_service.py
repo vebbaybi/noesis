@@ -13,12 +13,13 @@ class MentionService:
         self.openai = openai_service
         self.noesis_name = noesis_name
         self.duplicate_limit = duplicate_limit
-        self._seen: OrderedDict[str, None] = OrderedDict()
+        self._seen: OrderedDict[tuple[str, str], None] = OrderedDict()
 
     async def handle(self, event: MentionEvent, *, dry_run: bool = True) -> MentionResponse:
-        if event.event_id in self._seen:
+        event_key = (event.platform, event.event_id)
+        if event_key in self._seen:
             return self._result(event, "ignored", False, MentionIntent.UNCLEAR, reason="duplicate_event")
-        self._remember(event.event_id)
+        self._remember(event_key)
 
         if not event.text:
             return self._result(event, "needs_clarification", True, MentionIntent.UNCLEAR,
@@ -112,9 +113,9 @@ class MentionService:
     def _prompt(intent: MentionIntent, event: MentionEvent) -> str:
         return f"Intent: {intent.value}\nMessage: {event.text}\nParent context: {event.parent_text or '[not provided]'}"
 
-    def _remember(self, event_id: str) -> None:
-        self._seen[event_id] = None
-        self._seen.move_to_end(event_id)
+    def _remember(self, event_key: tuple[str, str]) -> None:
+        self._seen[event_key] = None
+        self._seen.move_to_end(event_key)
         while len(self._seen) > self.duplicate_limit:
             self._seen.popitem(last=False)
 

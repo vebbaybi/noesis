@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable
 import discord
 
 from noesis_agent.config.settings import settings
+from noesis_agent.platforms.discord_authorization import authorize_discord_message
 from noesis_agent.utils.errors import ConfigurationError, handle_noesis_error
 from noesis_agent.utils.noesislogger import get_noesis_logger
 
@@ -54,17 +55,32 @@ class NoesisDiscordBot(discord.Bot):
             return False
         return True
 
-    async def _ensure_allowed_message_channel(self, message: discord.Message) -> bool:
+    async def _ensure_allowed_message_channel(self, message: discord.Message):
         if message.guild is None:
-            return True
+            decision = authorize_discord_message(message, [])
+            return type(decision)(True, "direct_message", "direct_message", decision.context)
 
         allowed = set(getattr(settings, "discord_allowed_text_channel_ids", []) or [])
-        channel_id = int(getattr(getattr(message, "channel", None), "id", 0) or 0)
-        if allowed and channel_id not in allowed:
+        decision = authorize_discord_message(message, allowed)
+        if allowed and not decision.allowed:
+            context = decision.context
+            logger.warning(
+                "Discord channel authorization rejected",
+                extra={
+                    "current_channel_id": context.current_channel_id,
+                    "parent_channel_id": context.parent_channel_id,
+                    "thread_id": context.thread_id,
+                    "guild_id": context.guild_id,
+                    "allowed_channel_count": len(allowed),
+                    "diagnostic_reason": decision.reason,
+                    "channel_type": context.channel_type,
+                    "authorization_decision": "rejected",
+                },
+            )
             if self.user is not None and self.user in getattr(message, "mentions", []):
                 await message.reply("NOESIS is not enabled in this channel.", mention_author=False)
-            return False
-        return True
+            return decision
+        return decision if allowed else type(decision)(True, "allowlist_not_configured", "unrestricted", decision.context)
 
     @staticmethod
     def extract_text_prompt_from_content(
@@ -207,7 +223,10 @@ class NoesisDiscordBot(discord.Bot):
             return
 
         prompt = self._extract_text_prompt(message)
-        if not prompt or not await self._ensure_allowed_message_channel(message):
+        if not prompt:
+            return
+        authorization = await self._ensure_allowed_message_channel(message)
+        if not authorization.allowed:
             return
 
         if self.mention_callback is not None:
@@ -216,6 +235,7 @@ class NoesisDiscordBot(discord.Bot):
             event = normalize_discord_message(
                 message, bot_user_id=self.user.id if self.user is not None else None,
                 bot_name=settings.noesis_name,
+                authorization=authorization,
             )
             await self.mention_callback(event, message)
             return

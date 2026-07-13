@@ -23,6 +23,10 @@ python -c "from noesis_agent.api.app import app; print(app.title)"
 
 Health: `GET http://127.0.0.1:8000/health`.
 
+Run the complete local runtime with `python -m noesis_agent.runner`. This single process starts the configured API/operator server plus enabled background services such as Discord. Open `http://127.0.0.1:8000/`; it redirects to `/operator`. It is local-only, shows configuration presence/readiness rather than values, and offers dry-run mention testing. It has no live-send controls and no remote authentication; do not expose it publicly.
+
+Running `python -m uvicorn noesis_agent.api.app:app --reload` is a UI/API development mode only; it does not start Discord or other runner-managed background services. `0.0.0.0` is a server bind address, not a browser URL—use `127.0.0.1` or `localhost` in the browser.
+
 Dry-run mention test:
 
 ```bash
@@ -40,6 +44,8 @@ Provider variables: `OPENAI_API_KEY` enables OpenAI text calls; `NOESIS_DEFAULT_
 Discord: enable with `NOESIS_ENABLE_DISCORD=true` and set `DISCORD_BOT_TOKEN`. Guild/voice/channel IDs constrain live behavior. `NOESIS_ENABLE_LIVE_AGENT`, auto-start variables, and cross-post flags should remain false until the bot permissions and channel IDs are verified.
 
 Discord mention replies require both `NOESIS_ENABLE_LIVE_MENTION_SEND=true` and `NOESIS_ENABLE_DISCORD_MENTION_SEND=true`. Both default to false. With either switch off, mentions may be normalized and processed, but the dispatcher reports a disabled state and does not call Discord. OpenAI remains optional; without it, the deterministic local responder is used.
+
+An allowlisted Discord text channel also authorizes structurally confirmed Discord threads whose parent is that channel. Operators must not add individual thread IDs. Authorization uses the parent channel, but replies and normalized response-target metadata keep the originating thread ID.
 
 ## Controlled Discord live test checklist
 

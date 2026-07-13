@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from noesis_agent.models.schemas import (
@@ -27,8 +28,20 @@ from noesis_agent.models.schemas import (
 from noesis_agent.models.mentions import MentionDispatchResult, MentionEvent, MentionResponse
 from noesis_agent.platforms.mention_normalizers import normalize_discord_message, normalize_x_mention
 from noesis_agent.services.container import get_container
+from noesis_agent.api.operator import router as operator_router
 
 app = FastAPI(title="NOESIS Agent", version="0.1.0")
+app.include_router(operator_router)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/operator", status_code=307)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> RedirectResponse:
+    return RedirectResponse(url="/operator/assets/noesis_logo.pn", status_code=307)
 
 
 class RawMentionTestRequest(BaseModel):

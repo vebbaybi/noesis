@@ -22,7 +22,7 @@ class MentionIntent(str, Enum):
 
 class MentionEvent(BaseModel):
     event_id: str = Field(min_length=1, max_length=256)
-    platform: Literal["discord", "x", "local", "unknown"] = "local"
+    platform: str = Field(default="local", min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
     text: str = Field(default="", max_length=20_000)
     user_id: str | None = None
     username: str | None = None

@@ -69,6 +69,19 @@ _STANDARD_LOG_RECORD_FIELDS = {
 }
 
 
+def sanitize_log_extra(extra: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Namespace keys that Python logging reserves for LogRecord attributes."""
+    if not extra:
+        return {}
+    sanitized: dict[str, Any] = {}
+    for key, value in extra.items():
+        safe_key = f"extra_{key}" if key in _STANDARD_LOG_RECORD_FIELDS else key
+        while safe_key in _STANDARD_LOG_RECORD_FIELDS or safe_key in sanitized:
+            safe_key = f"extra_{safe_key}"
+        sanitized[safe_key] = value
+    return sanitized
+
+
 SENSITIVE_PATTERNS: tuple[tuple[str, str, int], ...] = (
     (r"(?i)(api[_-]?key\s*[=:]\s*[\"']?)([^\"'\s,&]+)", r"\1***REDACTED***", 0),
     (r"(?i)(authorization\s*:\s*bearer\s+)([a-z0-9\-._~+/=]+)", r"\1***REDACTED***", 0),
@@ -257,7 +270,7 @@ class ContextAdapter(logging.LoggerAdapter):
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         extra = dict(kwargs.get("extra") or {})
         extra.update(self.extra)
-        kwargs["extra"] = extra
+        kwargs["extra"] = sanitize_log_extra(extra)
         return msg, kwargs
 
     def with_context(self, **context: Any) -> "ContextAdapter":
@@ -421,7 +434,7 @@ class SessionLogger:
         if trace_id is not None:
             payload["trace_id"] = trace_id
         payload.update(extra)
-        self.logger.info("Transcript entry", extra=payload)
+        self.logger.info("Transcript entry", extra=sanitize_log_extra(payload))
 
     def log_llm_call(
         self,
@@ -449,7 +462,7 @@ class SessionLogger:
         if trace_id is not None:
             payload["trace_id"] = trace_id
         payload.update(extra)
-        self.logger.metrics("LLM API call", extra=payload)
+        self.logger.metrics("LLM API call", extra=sanitize_log_extra(payload))
 
 
 def set_trace_id(trace_id: str | None) -> contextvars.Token[str | None]:
@@ -507,9 +520,9 @@ def log_performance(
                         "success": True,
                     }
                     if log_args:
-                        extra["args"] = repr(args)[:arg_max_length]
+                        extra["call_args"] = repr(args)[:arg_max_length]
                         extra["kwargs"] = repr(kwargs)[:arg_max_length]
-                    logger.log(level, f"{func.__qualname__} completed", extra=extra)
+                    logger.log(level, f"{func.__qualname__} completed", extra=sanitize_log_extra(extra))
                     return result
                 except Exception as exc:
                     duration_ms = (time.perf_counter() - start) * 1000.0
@@ -540,9 +553,9 @@ def log_performance(
                     "success": True,
                 }
                 if log_args:
-                    extra["args"] = repr(args)[:arg_max_length]
+                    extra["call_args"] = repr(args)[:arg_max_length]
                     extra["kwargs"] = repr(kwargs)[:arg_max_length]
-                logger.log(level, f"{func.__qualname__} completed", extra=extra)
+                logger.log(level, f"{func.__qualname__} completed", extra=sanitize_log_extra(extra))
                 return result
             except Exception as exc:
                 duration_ms = (time.perf_counter() - start) * 1000.0
@@ -763,6 +776,7 @@ __all__ = [
     "get_session_logger",
     "log_performance",
     "redact_sensitive_data",
+    "sanitize_log_extra",
     "reset_session_context",
     "reset_trace_id",
     "set_session_context",

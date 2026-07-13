@@ -13,6 +13,7 @@ from noesis_agent.services.api_server import APIServer
 from noesis_agent.services.background import BackgroundServiceManager
 from noesis_agent.utils.errors import ConfigurationError
 from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.utils.logging import sanitize_log_extra
 
 
 class ApplicationLifecycle:
@@ -40,7 +41,11 @@ class ApplicationLifecycle:
     def _validate_environment(self) -> None:
         issues = settings.validate_environment()
         for issue in issues:
-            log_payload = {"key": issue.key, "severity": issue.severity, "message": issue.message}
+            log_payload = sanitize_log_extra({
+                "config_key": issue.key,
+                "severity": issue.severity,
+                "validation_message": issue.message,
+            })
             if issue.severity == "error":
                 self.logger.error("Configuration validation error", extra=log_payload)
             else:

@@ -38,7 +38,7 @@ def test_discord_normalizer_extracts_reply_context_and_attachment() -> None:
         reference=SimpleNamespace(resolved=parent), created_at=datetime.now(timezone.utc),
         attachments=[SimpleNamespace(id=5, filename="note.txt", url="https://example.invalid/note")],
     )
-    event = normalize_discord_message(message, bot_user_id=99)
+    event = normalize_discord_message(message, bot_user_id=99, thread_type=SimpleNamespace)
     assert event.platform == "discord"
     assert event.event_id == "123"
     assert event.is_reply_to_noesis

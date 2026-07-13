@@ -58,6 +58,7 @@ from .logging import (
     get_session_logger,
     log_performance,
     redact_sensitive_data,
+    sanitize_log_extra,
     reset_session_context,
     reset_trace_id,
     set_session_context,
@@ -237,7 +238,7 @@ class NoesisLogger:
             return None
         extra = redact_sensitive_data(dict(kwargs))
         extra = self._inject_web3_context(extra)
-        return extra
+        return sanitize_log_extra(extra)
 
     def debug(self, message: str, **extra: Any) -> None:
         self.logger.debug(message, extra=self._build_extra(**extra))

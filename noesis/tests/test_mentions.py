@@ -20,6 +20,11 @@ def test_dry_run_direct_question_uses_honest_fallback() -> None:
     assert "configured_llm_provider" in payload["missing_capabilities"]
 
 
+def test_future_platform_can_use_shared_cognition_contract() -> None:
+    event = MentionEvent(event_id="slack-1", platform="slack", text="@Noesis explain this", mentioned=True)
+    assert event.platform == "slack"
+
+
 @pytest.mark.asyncio
 async def test_intents_and_safe_edge_cases(monkeypatch) -> None:
     monkeypatch.setattr(OpenAIService, "is_enabled", lambda self: False)

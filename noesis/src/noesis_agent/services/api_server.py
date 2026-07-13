@@ -59,10 +59,20 @@ class APIServer:
 
         self.logger.info(
             "FastAPI server started",
-            extra={"host": settings.host, "port": settings.port},
+            extra={
+                "host": settings.host,
+                "port": settings.port,
+                "operator_url": self.operator_url(),
+            },
         )
 
         self.shutdown_manager.register_shutdown_handler(self.stop)
+
+    @staticmethod
+    def operator_url() -> str:
+        host = str(settings.host)
+        browser_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+        return f"http://{browser_host}:{settings.port}/operator"
 
     async def stop(self) -> None:
         if self._server is not None:

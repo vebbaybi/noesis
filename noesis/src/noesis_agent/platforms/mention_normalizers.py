@@ -5,6 +5,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from noesis_agent.models.mentions import MentionEvent
+from noesis_agent.platforms.discord_authorization import (
+    DiscordAuthorizationDecision,
+    extract_discord_channel_context,
+)
 
 
 def _get(value: Any, name: str, default: Any = None) -> Any:
@@ -17,7 +21,9 @@ def _id(value: Any) -> str | None:
 
 
 def normalize_discord_message(message: Any, *, bot_user_id: str | int | None = None,
-                              bot_name: str = "Noesis") -> MentionEvent:
+                              bot_name: str = "Noesis",
+                              authorization: DiscordAuthorizationDecision | None = None,
+                              thread_type: type[Any] | None = None) -> MentionEvent:
     author = _get(message, "author")
     channel = _get(message, "channel")
     reference = _get(message, "reference")
@@ -40,15 +46,29 @@ def normalize_discord_message(message: Any, *, bot_user_id: str | int | None = N
             "content_type": _get(item, "content_type"), "size": _get(item, "size"),
         }.items() if value is not None})
     timestamp = _get(message, "created_at") or datetime.now(timezone.utc)
-    thread_id = _id(channel) if _get(channel, "parent_id") is not None else None
+    context = authorization.context if authorization is not None else extract_discord_channel_context(
+        message, **({"thread_type": thread_type} if thread_type is not None else {})
+    )
     return MentionEvent(
         event_id=_id(message) or "discord-unknown", platform="discord",
         user_id=_id(author), username=_get(author, "display_name") or _get(author, "name"),
-        channel_id=_id(channel), conversation_id=thread_id or _id(channel),
+        channel_id=context.current_channel_id,
+        conversation_id=context.thread_id or context.current_channel_id,
         text=_get(message, "content", ""), parent_text=_get(parent, "content"),
         attachments=attachments, timestamp=timestamp, mentioned=mentioned,
         is_reply_to_noesis=reply_to_noesis,
-        metadata={"thread_id": thread_id, "guild_id": _id(_get(message, "guild"))},
+        metadata={
+            "message_id": _id(message),
+            "current_channel_id": context.current_channel_id,
+            "thread_id": context.thread_id,
+            "parent_channel_id": context.parent_channel_id,
+            "guild_id": context.guild_id,
+            "is_thread": context.is_thread,
+            "authorization_source": authorization.authorization_source if authorization else None,
+            "authorization_reason": authorization.reason if authorization else None,
+            "response_target_id": context.response_target_id,
+            "channel_type": context.channel_type,
+        },
     )
 
 
