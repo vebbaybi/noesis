@@ -47,7 +47,7 @@ jobs:
       run:
         working-directory: noesis
     env:
-      NOESIS_DATA_DIR: ${{ runner.temp }}/noesis-data
+      NOESIS_DATA_DIR: ${{ github.workspace }}/.noesis-data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
