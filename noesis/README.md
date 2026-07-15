@@ -8,6 +8,11 @@ idempotency, and explicit degraded health states. The base install stays lightwe
 See [AI stack](docs/AI_STACK.md), [RAG and memory](docs/RAG_AND_MEMORY.md),
 [moderation](docs/MODERATION.md), and [deployment](docs/DEPLOYMENT.md).
 
+CI is merge validation only; the manual release workflow builds reviewable artifacts but does not
+publish or deploy them. See [CI/CD](docs/CI_CD.md), [containers](docs/CONTAINERS.md), the
+[container failure analysis](docs/CI_CONTAINER_FAILURE.md), and the intentionally deferred
+[deployment pipeline](docs/DEPLOYMENT_PIPELINE.md).
+
 Noesis is an experimental Python agent/control plane for local session workflows, host responses, and community mention handling. It is not production-ready.
 
 ## Verified locally

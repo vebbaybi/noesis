@@ -1,3 +1,5 @@
+name: noesis
+
 services:
   noesis:
     build: .
@@ -6,9 +8,14 @@ services:
       NOESIS_PORT: 8000
       NOESIS_QDRANT_URL: http://qdrant:6333
       NOESIS_REDIS_URL: redis://redis:6379/0
-      NOESIS_LOCAL_LLM_BASE_URL: http://ollama:11434/v1
+      NOESIS_DATA_DIR: /app/.noesis_data
+      NOESIS_LOG_DIR: /app/.noesis_data/logs
+      NOESIS_ENABLE_API: "true"
       NOESIS_ENABLE_DISCORD: "false"
       NOESIS_ENABLE_X: "false"
+      NOESIS_ENABLE_LIVE_MENTION_SEND: "false"
+      NOESIS_LOCAL_LLM_ENABLED: "false"
+      NOESIS_EXTERNAL_LLM_ENABLED: "false"
       NOESIS_RAG_ENABLED: "true"
       NOESIS_REDIS_ENABLED: "true"
     ports: ["127.0.0.1:8000:8000"]
@@ -18,6 +25,12 @@ services:
       redis: {condition: service_healthy}
     restart: unless-stopped
     networks: [noesis-backend, noesis-edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/live', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 6
   qdrant:
     image: qdrant/qdrant:v1.14.1
     volumes: ["qdrant-data:/qdrant/storage"]
@@ -36,6 +49,39 @@ services:
     volumes: ["ollama-models:/root/.ollama"]
     restart: unless-stopped
     networks: [noesis-backend]
+  noesis-local-model:
+    build: .
+    profiles: [local-model]
+    environment:
+      NOESIS_HOST: 0.0.0.0
+      NOESIS_PORT: 8000
+      NOESIS_DATA_DIR: /app/.noesis_data
+      NOESIS_LOG_DIR: /app/.noesis_data/logs
+      NOESIS_QDRANT_URL: http://qdrant:6333
+      NOESIS_REDIS_URL: redis://redis:6379/0
+      NOESIS_ENABLE_API: "true"
+      NOESIS_LOCAL_LLM_ENABLED: "true"
+      NOESIS_LOCAL_LLM_BASE_URL: http://ollama:11434/v1
+      NOESIS_EXTERNAL_LLM_ENABLED: "false"
+      NOESIS_ENABLE_DISCORD: "false"
+      NOESIS_ENABLE_X: "false"
+      NOESIS_ENABLE_LIVE_MENTION_SEND: "false"
+      NOESIS_RAG_ENABLED: "true"
+      NOESIS_REDIS_ENABLED: "true"
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["noesis-data:/app/.noesis_data"]
+    depends_on:
+      qdrant: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      ollama: {condition: service_started}
+    restart: unless-stopped
+    networks: [noesis-backend, noesis-edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/live', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 12
 networks:
   noesis-backend: {internal: true}
   noesis-edge: {}

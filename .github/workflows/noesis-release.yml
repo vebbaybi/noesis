@@ -1,0 +1,90 @@
+name: Noesis release build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Allowed branch (main or noesis-*) or v* tag to build"
+        required: true
+        default: main
+        type: string
+      release_version:
+        description: "Version expected in noesis/pyproject.toml"
+        required: true
+        type: string
+      retain_artifacts:
+        description: "Retain build artifacts for 30 days"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  release-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run: {working-directory: noesis}
+    steps:
+      - name: Validate requested ref
+        working-directory: .
+        env: {REQUESTED_REF: "${{ inputs.ref }}"}
+        run: |
+          case "$REQUESTED_REF" in
+            main|noesis-*|v*|refs/tags/v*) ;;
+            *) echo "Ref is not allowed: $REQUESTED_REF" >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@v6
+        with:
+          ref: "${{ inputs.ref }}"
+          fetch-depth: 0
+      - name: Verify tag-shaped refs are tags
+        env: {REQUESTED_REF: "${{ inputs.ref }}"}
+        run: |
+          case "$REQUESTED_REF" in
+            refs/tags/v*) git show-ref --verify --quiet "$REQUESTED_REF" ;;
+            v*) git show-ref --verify --quiet "refs/tags/$REQUESTED_REF" ;;
+          esac
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.12"}
+      - name: Validate version
+        env: {EXPECTED_VERSION: "${{ inputs.release_version }}"}
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+          version = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+          if version != os.environ['EXPECTED_VERSION']:
+              raise SystemExit(f"Version mismatch: pyproject={version} requested={os.environ['EXPECTED_VERSION']}")
+          PY
+      - run: python -m pip install build twine
+      - run: python -m build && python -m twine check dist/*
+      - name: Clean wheel smoke test
+        run: |
+          python -m venv "$RUNNER_TEMP/noesis-release-smoke"
+          "$RUNNER_TEMP/noesis-release-smoke/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/noesis-release-smoke/bin/python" -m pip check
+          "$RUNNER_TEMP/noesis-release-smoke/bin/python" -c "import importlib.resources, noesis_agent; assert importlib.resources.files('noesis_agent.interfaces.api').joinpath('operator.html').is_file()"
+      - name: Build and inspect production image
+        run: |
+          docker build --tag "noesis:${{ inputs.release_version }}" .
+          test "$(docker image inspect "noesis:${{ inputs.release_version }}" --format '{{.Config.User}}')" != "0"
+          docker image inspect "noesis:${{ inputs.release_version }}" > dist/image-metadata.json
+          docker save "noesis:${{ inputs.release_version }}" | gzip > "dist/noesis-image-${{ inputs.release_version }}.tar.gz"
+      - name: Generate checksums
+        run: cd dist && sha256sum *.whl *.tar.gz > SHA256SUMS
+      - uses: anchore/sbom-action@v0
+        with:
+          image: "noesis:${{ inputs.release_version }}"
+          format: spdx-json
+          output-file: noesis/dist/noesis-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+          dependency-snapshot: false
+      - uses: actions/upload-artifact@v5
+        if: inputs.retain_artifacts
+        with:
+          name: noesis-release-build-${{ inputs.release_version }}
+          path: noesis/dist/*
+          if-no-files-found: error
+          retention-days: 30

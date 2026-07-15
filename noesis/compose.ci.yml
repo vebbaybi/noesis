@@ -1,0 +1,30 @@
+services:
+  noesis:
+    environment:
+      NOESIS_ENV: test
+      NOESIS_ENABLE_API: "true"
+      NOESIS_HOST: 0.0.0.0
+      NOESIS_PORT: 8000
+      NOESIS_DATA_DIR: /app/.noesis_data
+      NOESIS_LOG_DIR: /app/.noesis_data/logs
+      NOESIS_ENABLE_DISCORD: "false"
+      NOESIS_ENABLE_X: "false"
+      NOESIS_ENABLE_LIVE_AGENT: "false"
+      NOESIS_ENABLE_LIVE_MENTION_SEND: "false"
+      NOESIS_ENABLE_DISCORD_MENTION_SEND: "false"
+      NOESIS_LOCAL_LLM_ENABLED: "false"
+      NOESIS_LOCAL_LLM_REQUIRED: "false"
+      NOESIS_EXTERNAL_LLM_ENABLED: "false"
+      NOESIS_RAG_ENABLED: "false"
+      NOESIS_RAG_REQUIRED: "false"
+      NOESIS_REDIS_ENABLED: "true"
+      NOESIS_REDIS_REQUIRED: "true"
+      NOESIS_MODERATION_STAGE_TWO_ENABLED: "false"
+      OPENAI_API_KEY: ""
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/live', timeout=2)"]
+      interval: 3s
+      timeout: 2s
+      start_period: 10s
+      retries: 20

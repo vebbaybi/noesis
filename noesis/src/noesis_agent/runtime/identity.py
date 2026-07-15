@@ -24,6 +24,22 @@ def _git(*args: str) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
 
+def _git_branch() -> str:
+    branch = _git("branch", "--show-current")
+    if branch:
+        return branch
+
+    for variable in ("GITHUB_HEAD_REF", "GITHUB_REF_NAME"):
+        value = os.environ.get(variable, "").strip()
+        if value:
+            return value
+
+    commit = _git("rev-parse", "--short", "HEAD")
+    if commit:
+        return f"detached@{commit}"
+
+    return "unknown"
+
 
 def runtime_identity() -> dict[str, object]:
     env_path = PROJECT_ROOT / ".env"
@@ -31,7 +47,7 @@ def runtime_identity() -> dict[str, object]:
     return {
         "cognition_build_id": COGNITION_BUILD_ID,
         "git_commit": _git("rev-parse", "--short", "HEAD"),
-        "git_branch": _git("branch", "--show-current"),
+        "git_branch": _git(),
         "source_file_path": str(Path(noesis_agent.__file__).resolve()),
         "python_executable": str(Path(sys.executable).resolve()),
         "virtualenv_path": os.environ.get("VIRTUAL_ENV") or

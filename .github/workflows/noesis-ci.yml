@@ -1,15 +1,17 @@
 name: Noesis CI
 
 on:
-  push:
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: noesis-${{ github.workflow }}-${{ github.ref }}
+  group: noesis-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -17,145 +19,271 @@ env:
   NOESIS_ENABLE_DISCORD: "false"
   NOESIS_ENABLE_X: "false"
   NOESIS_ENABLE_LIVE_AGENT: "false"
+  NOESIS_ENABLE_LIVE_MENTION_SEND: "false"
+  NOESIS_LOCAL_LLM_ENABLED: "false"
+  NOESIS_EXTERNAL_LLM_ENABLED: "false"
   PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
 
 jobs:
-  base-install:
+  quality:
     runs-on: ubuntu-latest
     defaults:
-      run:
-        working-directory: noesis
+      run: {working-directory: noesis}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: noesis/pyproject.toml
-      - run: python -m pip install -e .
+      - run: python -m pip install -e ".[dev]"
       - run: python -m pip check
-      - run: python -c "from noesis_agent.runtime.container import ServiceContainer; print(ServiceContainer().is_healthy()['intelligence_stack'])"
+      - run: python -c "import noesis_agent; print(noesis_agent.__file__)"
+      - run: python -m compileall -q src
+      - name: Ruff
+        run: >-
+          ruff check
+          src/noesis_agent/domain/contracts/intelligence.py
+          src/noesis_agent/domain/contracts/components.py
+          src/noesis_agent/domain/contracts/indexing.py
+          src/noesis_agent/application/intelligence
+          src/noesis_agent/application/components.py
+          src/noesis_agent/application/index_recovery.py
+          src/noesis_agent/cognition/tools.py
+          src/noesis_agent/capabilities/moderation/pipeline.py
+          src/noesis_agent/integrations/llm/hybrid.py
+          src/noesis_agent/infrastructure/coordination
+          src/noesis_agent/infrastructure/retrieval
+          tests/test_intelligence_stack.py
+      - name: Mypy
+        run: >-
+          mypy --ignore-missing-imports
+          src/noesis_agent/domain/contracts/intelligence.py
+          src/noesis_agent/domain/contracts/components.py
+          src/noesis_agent/domain/contracts/indexing.py
+          src/noesis_agent/application/intelligence
+          src/noesis_agent/application/components.py
+          src/noesis_agent/application/index_recovery.py
+          src/noesis_agent/cognition/tools.py
+          src/noesis_agent/capabilities/moderation/pipeline.py
+          src/noesis_agent/integrations/llm/hybrid.py
+          src/noesis_agent/infrastructure/coordination
+          src/noesis_agent/infrastructure/retrieval
+      - name: Architecture boundaries
+        run: python -m pytest -p pytest_asyncio.plugin -q tests/test_architecture_boundaries.py tests/test_foundation_architecture.py
+      - name: Repository hygiene and workflow parsing
+        working-directory: .
+        run: |
+          python - <<'PY'
+          import pathlib, re, subprocess, yaml
+          root = pathlib.Path('.')
+          workflows = list((root / '.github/workflows').glob('*.yml'))
+          for path in workflows:
+              yaml.safe_load(path.read_text(encoding='utf-8'))
+          tracked = subprocess.check_output(['git', 'ls-files'], text=True).splitlines()
+          forbidden = re.compile(r'(^|/)(\.venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.noesis_data|logs?|model_cache)(/|$)|\.(py[co]|sqlite3?|db)$')
+          bad = [path for path in tracked if forbidden.search(path)]
+          if bad:
+              raise SystemExit(f'Forbidden tracked artifacts: {bad}')
+          legacy = re.compile(r'from noesis_agent\.(api|audio|brain|clients|commands|config|core|pipelines|platforms|services|store|utils)\b|import noesis_agent\.(api|audio|brain|clients|commands|config|core|pipelines|platforms|services|store|utils)\b')
+          legacy_hits = []
+          secret = re.compile(r'(?i)(api[_-]?key|token|secret|password)\s*[=:]\s*["\'][A-Za-z0-9_\-/+=]{16,}["\']')
+          secret_hits = []
+          for name in tracked:
+              path = root / name
+              if not path.is_file():
+                  continue
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              if name.startswith('noesis/src/') and legacy.search(text):
+                  legacy_hits.append(name)
+              if secret.search(text):
+                  secret_hits.append(name)
+          if legacy_hits or secret_hits:
+              raise SystemExit(f'legacy={legacy_hits} secret_candidates={secret_hits}')
+          print(f'parsed={len(workflows)} tracked_artifacts=0 legacy=0 secret_candidates=0')
+          PY
 
-  validate:
-    name: Validate (Python ${{ matrix.python-version }})
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     defaults:
-      run:
-        working-directory: noesis
+      run: {working-directory: noesis}
     env:
-      NOESIS_DATA_DIR: ${{ github.workspace }}/.noesis-data
+      NOESIS_DATA_DIR: ${{ github.workspace }}/.noesis-test-data
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: noesis/pyproject.toml
-      - name: Install Noesis and test dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
-      - name: Verify dependency consistency and workspace import
-        run: |
-          python -m pip check
-          python -c "import noesis_agent; print(noesis_agent.__file__)"
-      - name: Compile source
-        run: python -m compileall -q src
-      - name: Run tests
-        run: python -m pytest -p pytest_asyncio.plugin -q
-      - name: Run architecture rules separately
-        run: python -m pytest -p pytest_asyncio.plugin -q tests/test_architecture_boundaries.py tests/test_foundation_architecture.py
-      - name: Intelligence stack quality
-        if: matrix.python-version == '3.12'
-        run: |
-          ruff check src/noesis_agent/domain/contracts/intelligence.py src/noesis_agent/domain/contracts/components.py src/noesis_agent/domain/contracts/indexing.py src/noesis_agent/application/intelligence src/noesis_agent/application/components.py src/noesis_agent/application/index_recovery.py src/noesis_agent/cognition/tools.py src/noesis_agent/capabilities/moderation/pipeline.py src/noesis_agent/integrations/llm/hybrid.py src/noesis_agent/infrastructure/coordination src/noesis_agent/infrastructure/retrieval tests/test_intelligence_stack.py
-          mypy --ignore-missing-imports src/noesis_agent/domain/contracts/intelligence.py src/noesis_agent/domain/contracts/components.py src/noesis_agent/domain/contracts/indexing.py src/noesis_agent/application/intelligence src/noesis_agent/application/components.py src/noesis_agent/application/index_recovery.py src/noesis_agent/cognition/tools.py src/noesis_agent/capabilities/moderation/pipeline.py src/noesis_agent/integrations/llm/hybrid.py src/noesis_agent/infrastructure/coordination src/noesis_agent/infrastructure/retrieval
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip check
+      - run: python -c "import noesis_agent; print(noesis_agent.__file__)"
+      - name: Credential-free default suite
+        run: >-
+          python -m pytest -p pytest_asyncio.plugin -q
+          --ignore=tests/test_architecture_boundaries.py
+          --ignore=tests/test_foundation_architecture.py
 
-  intelligence-extras:
+  integration:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.14.1
+        ports: ["6333:6333"]
     defaults:
-      run:
-        working-directory: noesis
+      run: {working-directory: noesis}
+    env:
+      NOESIS_REDIS_URL: redis://127.0.0.1:6379/0
+      NOESIS_QDRANT_URL: http://127.0.0.1:6333
+      NOESIS_DATA_DIR: ${{ github.workspace }}/.noesis-integration-data
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: noesis/pyproject.toml
-      - run: python -m pip install -e ".[dev,rag,local-llm,coordination]"
-      - run: python -m pip check
-      - run: python -c "import fastembed, litellm, qdrant_client, redis"
-      - run: python -m pytest -p pytest_asyncio.plugin -q tests/test_intelligence_stack.py tests/test_index_recovery.py
-      - name: Smoke-test API health endpoints
+      - run: python -m pip install -e ".[dev,rag,coordination]"
+      - name: Wait for integration services
         run: |
           python - <<'PY'
-          from fastapi.testclient import TestClient
-          from noesis_agent.interfaces.api.app import app
-          client = TestClient(app)
-          assert client.get("/live").status_code == 200
-          assert client.get("/ready").status_code == 200
+          import socket, time
+          for host, port in [('127.0.0.1', 6379), ('127.0.0.1', 6333)]:
+              for attempt in range(30):
+                  try:
+                      with socket.create_connection((host, port), timeout=2):
+                          break
+                  except OSError:
+                      if attempt == 29:
+                          raise
+                      time.sleep(2)
           PY
+      - name: Redis and Qdrant service round trips
+        run: |
+          python - <<'PY'
+          import asyncio, uuid
+          import redis.asyncio as redis
+          from qdrant_client import AsyncQdrantClient, models
+          async def main():
+              cache = redis.from_url('redis://127.0.0.1:6379/0', decode_responses=True)
+              assert await cache.ping()
+              assert await cache.set('noesis:ci:ttl', 'ok', ex=10)
+              assert await cache.get('noesis:ci:ttl') == 'ok'
+              assert 0 < await cache.ttl('noesis:ci:ttl') <= 10
+              await cache.delete('noesis:ci:ttl')
+              await cache.aclose()
+              client = AsyncQdrantClient(url='http://127.0.0.1:6333')
+              collection = f'noesis_ci_{uuid.uuid4().hex}'
+              await client.create_collection(collection, vectors_config=models.VectorParams(size=2, distance=models.Distance.COSINE))
+              await client.upsert(collection, [
+                  models.PointStruct(id=1, vector=[1.0, 0.0], payload={'tenant_id': 'a'}),
+                  models.PointStruct(id=2, vector=[0.0, 1.0], payload={'tenant_id': 'b'}),
+              ], wait=True)
+              result = await client.query_points(collection, query=[1.0, 0.0], query_filter=models.Filter(must=[models.FieldCondition(key='tenant_id', match=models.MatchValue(value='a'))]), limit=10)
+              assert [point.id for point in result.points] == [1]
+              await client.delete_collection(collection)
+              await client.close()
+          asyncio.run(main())
+          PY
+      - name: Recovery, reconciliation, and real FastEmbed
+        run: python -m pytest -p pytest_asyncio.plugin -q tests/test_index_recovery.py
+      - name: API lifecycle
+        run: python -m pytest -p pytest_asyncio.plugin -q tests/test_health.py tests/test_runner_lifecycle.py tests/test_api_server_operator.py
 
-  compose-cpu:
+  container-smoke:
     runs-on: ubuntu-latest
     defaults:
-      run:
-        working-directory: noesis
+      run: {working-directory: noesis}
     steps:
-      - uses: actions/checkout@v4
-      - run: docker compose config --quiet
-      - run: docker compose build noesis
-      - run: docker compose up -d qdrant redis noesis
-      - name: Wait for liveness and readiness
+      - uses: actions/checkout@v6
+      - name: Validate and build
         run: |
-          ready=false
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8000/live >/dev/null && curl --fail --silent http://127.0.0.1:8000/ready >/dev/null; then
-              ready=true
-              break
-            fi
+          docker compose -f compose.yml -f compose.ci.yml config --quiet
+          docker compose -f compose.yml -f compose.ci.yml build noesis
+          test "$(docker image inspect noesis-noesis --format '{{.Config.User}}')" != ""
+          test "$(docker image inspect noesis-noesis --format '{{.Config.User}}')" != "0"
+      - name: Start services
+        run: docker compose -f compose.yml -f compose.ci.yml up -d --wait qdrant redis noesis
+      - name: Wait for container health
+        run: |
+          for attempt in $(seq 1 40); do
+            state="$(docker inspect --format '{{.State.Status}}:{{if .State.Health}}{{.State.Health.Status}}{{end}}' noesis-noesis-1 2>/dev/null || true)"
+            test "$state" != "exited:" || exit 1
+            test "$state" = "running:healthy" && exit 0
             sleep 3
           done
-          test "$ready" = true
-      - name: Validate service round trips
+          exit 1
+      - name: Validate runtime contracts
         run: |
-          docker compose exec -T redis redis-cli SET noesis:ci:roundtrip ok EX 10
-          test "$(docker compose exec -T redis redis-cli --raw GET noesis:ci:roundtrip)" = "ok"
-          docker compose exec -T noesis python -c "import asyncio; from qdrant_client import AsyncQdrantClient; asyncio.run(AsyncQdrantClient(url='http://qdrant:6333').get_collections())"
-      - name: Save sanitized failure logs
+          curl --fail --silent http://127.0.0.1:8000/live
+          curl --fail --silent http://127.0.0.1:8000/ready
+          test "$(docker compose -f compose.yml -f compose.ci.yml exec -T noesis id -u)" != "0"
+          docker compose -f compose.yml -f compose.ci.yml exec -T noesis sh -c 'for d in /app/.noesis_data /app/.noesis_data/logs /app/.noesis_data/tmp /app/.noesis_data/cache; do p="$d/ci-write"; printf ok > "$p"; test "$(cat "$p")" = ok; rm "$p"; done'
+          docker compose -f compose.yml -f compose.ci.yml exec -T redis redis-cli SET noesis:ci:roundtrip ok EX 10
+          test "$(docker compose -f compose.yml -f compose.ci.yml exec -T redis redis-cli --raw GET noesis:ci:roundtrip)" = "ok"
+          docker compose -f compose.yml -f compose.ci.yml exec -T noesis python -c "import asyncio; from qdrant_client import AsyncQdrantClient; asyncio.run(AsyncQdrantClient(url='http://qdrant:6333').get_collections())"
+      - name: Restart check
+        run: |
+          docker compose -f compose.yml -f compose.ci.yml restart noesis
+          for attempt in $(seq 1 30); do
+            test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' noesis-noesis-1)" = "healthy" && exit 0
+            sleep 3
+          done
+          exit 1
+      - name: Diagnostics
         if: failure()
-        run: docker compose logs --no-color | sed -E 's/(token|key|secret)=[^ ]+/\1=[REDACTED]/gi' > compose-failure.log
-      - uses: actions/upload-artifact@v4
+        run: |
+          docker compose -f compose.yml -f compose.ci.yml ps --all
+          docker compose -f compose.yml -f compose.ci.yml logs --no-color noesis
+          docker inspect noesis-noesis-1 --format 'state={{json .State}} config={{json .Config.Env}}' | sed -E 's/(TOKEN|KEY|SECRET|PASSWORD)=[^",]*/\1=[REDACTED]/gi'
+      - name: Save sanitized logs
         if: failure()
-        with:
-          name: compose-failure-logs
-          path: noesis/compose-failure.log
-          retention-days: 7
+        run: docker compose -f compose.yml -f compose.ci.yml logs --no-color | sed -E 's/(token|key|secret|password)=[^ ]+/\1=[REDACTED]/gi' > compose-failure.log
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with: {name: compose-failure-logs, path: noesis/compose-failure.log, retention-days: 7}
       - if: always()
-        run: docker compose down --volumes --remove-orphans
+        run: docker compose -f compose.yml -f compose.ci.yml down --volumes --remove-orphans
 
-  package:
-    name: Build release artifact
-    if: github.event_name != 'pull_request'
-    needs: validate
+  package-smoke:
+    needs: [quality, tests, integration, container-smoke]
     runs-on: ubuntu-latest
     defaults:
-      run:
-        working-directory: noesis
+      run: {working-directory: noesis}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.12"}
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - name: Install and inspect wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/noesis-package-smoke"
+          "$RUNNER_TEMP/noesis-package-smoke/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/noesis-package-smoke/bin/python" -m pip check
+          "$RUNNER_TEMP/noesis-package-smoke/bin/python" - <<'PY'
+          import importlib.metadata, importlib.resources, noesis_agent
+          assert importlib.metadata.entry_points(group='console_scripts', name='noesis')
+          resource = importlib.resources.files('noesis_agent.interfaces.api').joinpath('operator.html')
+          assert resource.is_file() and resource.read_text(encoding='utf-8')
+          print(noesis_agent.__file__)
+          PY
+      - uses: actions/upload-artifact@v5
+        if: github.ref == 'refs/heads/main'
         with:
-          python-version: "3.12"
-      - name: Build distributions
-        run: python -m pip install --upgrade build && python -m build
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
-        with:
-          name: noesis-agent-${{ github.sha }}
+          name: noesis-package-${{ github.sha }}
           path: noesis/dist/*
-          if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
