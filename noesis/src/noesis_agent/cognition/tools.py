@@ -41,22 +41,36 @@ class ToolRegistry:
             raise ValueError(f"Tool already registered: {definition.tool_id}")
         self._tools[definition.tool_id] = definition
 
-    async def execute(self, call: ToolCall, *, tenant_id: str, user_id: str,
-                      authorized_capabilities: frozenset[str]) -> str:
+    async def execute(
+        self,
+        call: ToolCall,
+        *,
+        tenant_id: str,
+        user_id: str,
+        authorized_capabilities: frozenset[str],
+    ) -> str:
         definition = self._tools.get(call.tool_id)
         if definition is None:
             raise ValueError(f"Tool is not allowlisted: {call.tool_id}")
         arguments = definition.arguments_model.model_validate(call.arguments)
         if definition.required_capability not in authorized_capabilities:
-            raise PermissionError(f"Capability is not authorized: {definition.required_capability}")
-        async with asyncio.timeout(definition.timeout_seconds):
-            result = await definition.handler(arguments, tenant_id, user_id)
+            raise PermissionError(
+                f"Capability is not authorized: {definition.required_capability}"
+            )
+        result = await asyncio.wait_for(
+            definition.handler(arguments, tenant_id, user_id),
+            timeout=definition.timeout_seconds,
+        )
         return result.model_dump_json()
 
     def schemas(self) -> list[dict[str, object]]:
-        return [{
-            "id": item.tool_id, "purpose": item.purpose,
-            "arguments": item.arguments_model.model_json_schema(),
-            "required_capability": item.required_capability,
-            "side_effect": item.side_effect.value,
-        } for item in self._tools.values()]
+        return [
+            {
+                "id": item.tool_id,
+                "purpose": item.purpose,
+                "arguments": item.arguments_model.model_json_schema(),
+                "required_capability": item.required_capability,
+                "side_effect": item.side_effect.value,
+            }
+            for item in self._tools.values()
+        ]
