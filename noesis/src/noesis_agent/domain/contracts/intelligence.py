@@ -10,13 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class CapabilityState(str, Enum):
     DISABLED = "disabled"
+    INITIALIZING = "initializing"
     UNAVAILABLE = "unavailable"
+    DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
+    UNVALIDATED = "unvalidated"
     LOADING = "loading"
     READY = "ready"
     DEGRADED = "degraded"
     FAILED = "failed"
     CREDENTIAL_BLOCKED = "credential_blocked"
     HARDWARE_BLOCKED = "hardware_blocked"
+    PLATFORM_BLOCKED = "platform_blocked"
 
 
 class FailureCategory(str, Enum):
@@ -58,6 +62,7 @@ class ModerationDecision(BaseModel):
     action: ModerationAction
     lexical_categories: list[str] = Field(default_factory=list)
     toxicity_scores: dict[str, float] = Field(default_factory=dict)
+    score_details: list["ModerationScore"] = Field(default_factory=list)
     triggered_categories: list[str] = Field(default_factory=list)
     thresholds: dict[str, float] = Field(default_factory=dict)
     policy_version: str = "1"
@@ -66,6 +71,17 @@ class ModerationDecision(BaseModel):
     failure: FailureCategory | None = None
     review_eligible: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ModerationScore(BaseModel):
+    raw_label: str
+    category: str
+    score: float = Field(ge=0.0, le=1.0)
+    threshold: float = Field(ge=0.0, le=1.0)
+    triggered: bool
+    model_name: str
+    model_version: str
+    policy_version: str = "1"
 
 
 class DirectResponse(BaseModel):
@@ -130,11 +146,17 @@ class CapabilityHealth(BaseModel):
     name: str
     state: CapabilityState
     detail: str = ""
+    mandatory: bool = False
+    validation_level: str = "construction"
+    last_successful_check: datetime | None = None
+    last_failed_check: datetime | None = None
+    failure_category: FailureCategory | None = None
+    retry_state: str = "idle"
 
 
 __all__ = [
     "CapabilityHealth", "CapabilityState", "Clarification", "DirectResponse",
-    "FailureCategory", "IntelligenceRequest", "IntelligenceResult", "ModerationAction",
+    "FailureCategory", "IntelligenceRequest", "IntelligenceResult", "ModerationAction", "ModerationScore",
     "ModerationDecision", "ModerationDirection", "Refusal", "RetrievalItem",
     "StructuredOutcome", "ToolCall",
 ]

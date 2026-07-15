@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import importlib.util
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 if TYPE_CHECKING:
     from qdrant_client import AsyncQdrantClient
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 from noesis_agent.domain.contracts.intelligence import (
     CapabilityHealth, CapabilityState, IntelligenceRequest, RetrievalItem,
 )
+from noesis_agent.domain.contracts.indexing import SemanticSourceRecord, VectorPointMetadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +128,71 @@ class SemanticIndex:
         vector = await self._embedding(text, query=False)
         await self._client.upsert(collection_name=self._config.collection,
                                   points=[models.PointStruct(id=point_id, vector=vector, payload=payload)], wait=True)
+
+    async def upsert_source(self, record: SemanticSourceRecord) -> str:
+        if not self._ready or self._client is None:
+            raise ConnectionError("Qdrant semantic index is not ready")
+        from qdrant_client import models
+        point_id = str(uuid5(NAMESPACE_URL, f"{record.tenant_id}:{record.source_id}"))
+        payload = {
+            "tenant_id": record.tenant_id, "conversation_id": record.conversation_id,
+            "source_type": "structured_memory", "source_id": record.source_id,
+            "author_id": record.author_id, "timestamp": record.created_at.isoformat(),
+            "content_hash": record.content_hash, "chunk_index": 0, "revision": record.revision,
+            "visibility": record.visibility, "memory_type": record.memory_type,
+            "redaction_status": "reviewed", "retention_state": "active",
+            "embedding_model": self._config.model, "embedding_dimension": self._config.dimension,
+            "schema_version": self._config.schema_version, "text": record.text,
+        }
+        vector = await self._embedding(record.text, query=False)
+        if len(vector) != self._config.dimension:
+            raise ValueError(f"Embedding dimension {len(vector)} != configured {self._config.dimension}")
+        await self._client.upsert(
+            collection_name=self._config.collection,
+            points=[models.PointStruct(id=point_id, vector=vector, payload=payload)], wait=True,
+        )
+        return point_id
+
+    async def list_metadata(self, tenant_id: str | None = None) -> list[VectorPointMetadata]:
+        if not self._ready or self._client is None:
+            return []
+        from qdrant_client import models
+        query_filter = None if tenant_id is None else models.Filter(must=[
+            models.FieldCondition(key="tenant_id", match=models.MatchValue(value=tenant_id))
+        ])
+        records: list[VectorPointMetadata] = []
+        offset: int | str | UUID | None = None
+        while True:
+            points, offset = await self._client.scroll(
+                collection_name=self._config.collection, scroll_filter=query_filter,
+                limit=256, offset=offset, with_payload=True, with_vectors=False,
+            )
+            for point in points:
+                payload = point.payload or {}
+                if "source_id" not in payload:
+                    continue
+                records.append(VectorPointMetadata(
+                    point_id=str(point.id), source_id=str(payload["source_id"]),
+                    tenant_id=str(payload.get("tenant_id", "")), revision=int(payload.get("revision", 0)),
+                    content_hash=str(payload.get("content_hash", "")),
+                    embedding_model=str(payload.get("embedding_model", "")),
+                    embedding_dimension=int(payload.get("embedding_dimension", self._config.dimension)),
+                    schema_version=int(payload.get("schema_version", 0)),
+                ))
+            if offset is None:
+                break
+        return records
+
+    async def delete_points(self, point_ids: Sequence[str]) -> None:
+        if not point_ids:
+            return
+        if not self._ready or self._client is None:
+            raise ConnectionError("Qdrant semantic index is not ready")
+        from qdrant_client import models
+        await self._client.delete(
+            collection_name=self._config.collection,
+            points_selector=models.PointIdsList(points=list(point_ids)), wait=True,
+        )
 
     async def close(self) -> None:
         if self._client is not None:

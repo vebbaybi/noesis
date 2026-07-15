@@ -51,6 +51,7 @@ class BackgroundServiceManager:
             command_handler.handle,
             live_agent_getter=lambda: getattr(self.container, "live", None),
             mention_callback=self._handle_discord_mention,
+            component_service=self.container.components,
         )
         if hasattr(self.container, "bind_discord_client"):
             self.container.bind_discord_client(self._discord_bot)

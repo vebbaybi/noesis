@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from noesis_agent.domain.contracts.intelligence import CapabilityHealth
 
 from noesis_agent.infrastructure.config.settings import settings
 
@@ -41,11 +45,16 @@ class ServiceContainer:
         from noesis_agent.application.intelligence.pipeline import IntelligencePipeline
         from noesis_agent.capabilities.moderation.pipeline import DetoxifyModerator, TwoStageModeration
         from noesis_agent.cognition.tools import ToolRegistry
+        from noesis_agent.application.components import PersistentComponentService
+        from noesis_agent.infrastructure.persistence.component_store import JsonComponentRepository
         from noesis_agent.infrastructure.coordination.idempotency import RedisIdempotencyStore
         from noesis_agent.infrastructure.retrieval.semantic_index import IndexConfig, SemanticIndex
+        from noesis_agent.application.index_recovery import RecoverableMemoryIndex
+        from noesis_agent.infrastructure.persistence.index_store import JsonSemanticSourceRepository
         from noesis_agent.integrations.llm.hybrid import HybridLLMRouter, ProviderConfig
 
         self.store = JsonStore(settings.data_dir)
+        self.components = PersistentComponentService(JsonComponentRepository(self.store))
 
         self.openai = OpenAIService()
         self.discord_context_tool = DiscordContextTool()
@@ -69,7 +78,9 @@ class ServiceContainer:
             cooldown_seconds=settings.llm_circuit_cooldown_seconds,
             concurrency=settings.llm_concurrency,
         )
-        toxicity = DetoxifyModerator(device=settings.moderation_device) \
+        toxicity = DetoxifyModerator(model_name=settings.moderation_model, device=settings.moderation_device,
+                                     queue_size=settings.moderation_queue_size,
+                                     inference_timeout=settings.moderation_inference_timeout_seconds) \
             if settings.moderation_stage_two_enabled else None
         self.safety = TwoStageModeration(toxicity=toxicity, fail_closed=settings.moderation_fail_closed)
         self.semantic_index = SemanticIndex(IndexConfig(
@@ -77,10 +88,14 @@ class ServiceContainer:
             model=settings.embedding_model, dimension=settings.embedding_dimension,
             timeout_seconds=settings.memory_retrieval_timeout_seconds,
         ), enabled=settings.rag_enabled, concurrency=settings.embedding_concurrency)
+        self.memory_index = RecoverableMemoryIndex(
+            JsonSemanticSourceRepository(self.store), self.semantic_index,
+            embedding_model=settings.embedding_model, embedding_dimension=settings.embedding_dimension,
+        )
         self.idempotency = RedisIdempotencyStore(settings.redis_url if settings.redis_enabled else "")
         self.tools = ToolRegistry()
         self.intelligence = IntelligencePipeline(
-            moderation=self.safety, retrieval=self.semantic_index, model=self.hybrid_llm,
+            moderation=self.safety, retrieval=self.memory_index, model=self.hybrid_llm,
             idempotency=self.idempotency, tools=self.tools,
         )
 
@@ -211,6 +226,8 @@ class ServiceContainer:
             self._live.set_discord_client(client)
 
     def is_healthy(self) -> dict[str, object]:
+        capability_health = self.capability_health()
+        mandatory_failures = [item for item in capability_health if item.mandatory and item.state.value != "ready"]
         return {
             "openai_enabled": self.openai.is_enabled(),
             "x_enabled": self.x_client.is_enabled(),
@@ -220,19 +237,55 @@ class ServiceContainer:
             "cognition_engine": self.cognition_engine.capability_report(),
             "cognition": [status.model_dump(mode="json") for status in self.cognition.statuses()],
             "intelligence_stack": {
-                "providers": [item.model_dump(mode="json") for item in self.hybrid_llm.health()],
-                "rag": self.semantic_index.health().model_dump(mode="json"),
-                "moderation": self.safety.health().model_dump(mode="json"),
-                "redis": self.idempotency.health().model_dump(mode="json"),
+                "providers": [item.model_dump(mode="json") for item in capability_health if item.name.startswith("llm:")],
+                "rag": next(item for item in capability_health if item.name == "rag").model_dump(mode="json"),
+                "moderation": next(item for item in capability_health if item.name == "moderation").model_dump(mode="json"),
+                "redis": next(item for item in capability_health if item.name == "redis").model_dump(mode="json"),
+                "persistent_components": {
+                    "state": "ready", "pending": len(self.components.pending()),
+                    "validation_level": "locally_tested",
+                },
+            },
+            "liveness": {"state": "alive"},
+            "readiness": {
+                "state": "not_ready" if mandatory_failures else "ready",
+                "mandatory_failures": [item.name for item in mandatory_failures],
             },
             "live_agent_ready": settings.enable_live_agent,
             "output_channels": [channel.value for channel in self.local_output.capabilities()]
             + [channel.value for channel in self.discord_output.capabilities()],
         }
 
+    def capability_health(self) -> list["CapabilityHealth"]:
+        from noesis_agent.domain.contracts.intelligence import CapabilityHealth, CapabilityState
+
+        providers = [item.model_copy(update={
+            "mandatory": settings.local_llm_required if item.name == "llm:local" else False
+        }) for item in self.hybrid_llm.health()]
+        rag = self.memory_index.health().model_copy(update={"mandatory": settings.rag_required})
+        moderation = self.safety.health().model_copy(update={
+            "mandatory": settings.moderation_stage_two_required
+        })
+        redis = self.idempotency.health().model_copy(update={"mandatory": settings.redis_required})
+        discord_state = CapabilityState.DISABLED if not settings.enable_discord else \
+            CapabilityState.CREDENTIAL_BLOCKED if not settings.discord_bot_token else CapabilityState.UNVALIDATED
+        discord = CapabilityHealth(
+            name="discord", state=discord_state, mandatory=False,
+            detail="disabled" if discord_state is CapabilityState.DISABLED else
+                   "bot token missing" if discord_state is CapabilityState.CREDENTIAL_BLOCKED else
+                   "constructed; guild connection not validated",
+            validation_level="construction",
+        )
+        return [*providers, rag, moderation, redis, discord]
+
     async def start_intelligence(self) -> None:
         await self.semantic_index.initialize()
+        if settings.redis_enabled:
+            await self.idempotency.validate_service()
+        if settings.moderation_warmup:
+            await self.safety.warm_up()
 
     async def close_intelligence(self) -> None:
         await self.semantic_index.close()
         await self.idempotency.close()
+        self.safety.close()

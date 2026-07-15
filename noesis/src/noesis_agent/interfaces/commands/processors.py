@@ -184,6 +184,27 @@ class NFTInsightCommand(BaseCommand):
         return insight
 
 
+class MemoryCorrectionCommand(BaseCommand):
+    def __init__(self) -> None:
+        super().__init__("noesis.commands.memory_correction")
+
+    async def execute(self, payload: dict[str, Any]) -> str:
+        from noesis_agent.domain.contracts.intelligence import ModerationAction, ModerationDirection
+        from noesis_agent.domain.contracts.memory_correction import MemoryCorrectionRecord, MemoryCorrectionRequest
+
+        request = MemoryCorrectionRequest.model_validate(payload)
+        decision = await self.container.safety.evaluate(
+            tenant_id=request.tenant_id,
+            text=f"{request.subject}\n{request.correction}\n{request.reason}",
+            direction=ModerationDirection.INBOUND,
+        )
+        if decision.action in {ModerationAction.BLOCK, ModerationAction.ESCALATE}:
+            return "The correction was blocked by inbound moderation policy."
+        record = MemoryCorrectionRecord(**request.model_dump(), moderation_decision_id=decision.decision_id)
+        self.container.store.write("memory_corrections", record.request_id, record.model_dump(mode="json"))
+        return f"Memory correction {record.request_id[:8]} submitted for operator review."
+
+
 __all__ = [
     "AnnounceCommand",
     "ChatCommand",
@@ -191,4 +212,5 @@ __all__ = [
     "SoloSessionCommand",
     "VoiceTestCommand",
     "NFTInsightCommand",
+    "MemoryCorrectionCommand",
 ]

@@ -6,6 +6,7 @@ from noesis_agent.interfaces.commands.processors import (
     AnnounceCommand,
     ChatCommand,
     NFTInsightCommand,
+    MemoryCorrectionCommand,
     PlanEpisodeCommand,
     SoloSessionCommand,
     VoiceTestCommand,
@@ -27,6 +28,7 @@ class CommandHandler:
         solo = SoloSessionCommand()
         voice_test = VoiceTestCommand()
         insight = NFTInsightCommand()
+        memory_correction = MemoryCorrectionCommand()
 
         self._processors = {
             "announce": announce,
@@ -40,6 +42,7 @@ class CommandHandler:
             "test_voice": voice_test,
             "nft_insight": insight,
             "insight": insight,
+            "memory_correction": memory_correction,
         }
 
     async def handle(self, command_name: str, payload: dict[str, Any] | None) -> str | None:

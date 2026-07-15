@@ -7,6 +7,7 @@ import random
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -48,6 +49,9 @@ class HybridLLMRouter:
         self._cooldown_seconds = cooldown_seconds
         self._circuits = {provider.name: _Circuit() for provider in providers}
         self._slots = asyncio.Semaphore(concurrency)
+        self._last_success: dict[str, datetime] = {}
+        self._last_failure: dict[str, datetime] = {}
+        self._last_error: dict[str, str] = {}
 
     async def generate(self, request: IntelligenceRequest,
                        context: Sequence[RetrievalItem]) -> tuple[StructuredOutcome, str, bool]:
@@ -56,28 +60,33 @@ class HybridLLMRouter:
         attempts = 0
         first = True
         for provider in self._providers:
+            if attempts >= self._max_attempts:
+                break
             if not provider.enabled or (request.local_only and not provider.local):
                 continue
             circuit = self._circuits[provider.name]
             if circuit.open_until > time.monotonic():
                 continue
-            while attempts < self._max_attempts:
-                attempts += 1
-                try:
-                    outcome = await self._call(provider, request, context)
-                    circuit.failures = 0
-                    circuit.open_until = 0.0
-                    return outcome, provider.name, not first
-                except ValueError:
-                    return self._degraded(request), f"{provider.name}:malformed", True
-                except Exception as exc:
-                    if not self._is_transient(exc):
-                        raise
-                    circuit.failures += 1
-                    if circuit.failures >= 3:
-                        circuit.open_until = time.monotonic() + self._cooldown_seconds
-                    if attempts < self._max_attempts:
-                        await asyncio.sleep(min(1.5, 0.2 * (2 ** (attempts - 1))) + random.uniform(0, 0.1))
+            attempts += 1
+            try:
+                outcome = await self._call(provider, request, context)
+                circuit.failures = 0
+                circuit.open_until = 0.0
+                self._last_success[provider.name] = datetime.now(timezone.utc)
+                return outcome, provider.name, not first
+            except ValueError:
+                self._record_failure(provider.name, "malformed structured output")
+                return self._degraded(request), f"{provider.name}:malformed", True
+            except Exception as exc:
+                if not self._is_transient(exc):
+                    self._record_failure(provider.name, exc.__class__.__name__)
+                    raise
+                self._record_failure(provider.name, exc.__class__.__name__)
+                circuit.failures += 1
+                if circuit.failures >= 3:
+                    circuit.open_until = time.monotonic() + self._cooldown_seconds
+                if attempts < self._max_attempts:
+                    await asyncio.sleep(min(1.5, 0.2 * (2 ** (attempts - 1))) + random.uniform(0, 0.1))
             first = False
         return self._degraded(request), "deterministic-local", True
 
@@ -114,6 +123,11 @@ class HybridLLMRouter:
 
     @staticmethod
     def _is_transient(exc: Exception) -> bool:
+        # Authentication/authorization and invalid local configuration are
+        # represented by OSError subclasses on some platforms, but retrying or
+        # falling through to another provider would hide a permanent failure.
+        if isinstance(exc, (PermissionError, FileNotFoundError)):
+            return False
         return isinstance(exc, (asyncio.TimeoutError, ConnectionError, OSError)) or exc.__class__.__name__ in {
             "APIConnectionError", "InternalServerError", "RateLimitError", "ServiceUnavailableError", "Timeout",
         }
@@ -123,9 +137,34 @@ class HybridLLMRouter:
         now = time.monotonic()
         return [CapabilityHealth(
             name=f"llm:{provider.name}",
-            state=CapabilityState.UNAVAILABLE if not dependency else
+            state=CapabilityState.DEPENDENCY_UNAVAILABLE if not dependency else
                   CapabilityState.DEGRADED if self._circuits[provider.name].open_until > now else
-                  CapabilityState.READY if provider.enabled else CapabilityState.DISABLED,
+                  CapabilityState.READY if provider.name in self._last_success else
+                  CapabilityState.UNVALIDATED if provider.enabled else CapabilityState.DISABLED,
             detail="LiteLLM not installed" if not dependency else
-                   "circuit open" if self._circuits[provider.name].open_until > now else "configured",
+                   "circuit open" if self._circuits[provider.name].open_until > now else
+                   self._last_error.get(provider.name, "configured but not service validated"),
+            validation_level="local_service" if provider.name in self._last_success else "construction",
+            last_successful_check=self._last_success.get(provider.name),
+            last_failed_check=self._last_failure.get(provider.name),
+            retry_state="circuit_open" if self._circuits[provider.name].open_until > now else "idle",
         ) for provider in self._providers]
+
+    async def diagnose_local(self) -> dict[str, object]:
+        started = time.perf_counter()
+        request = IntelligenceRequest(
+            event_id="local-provider-diagnostic", tenant_id="operator-local", user_id="operator",
+            conversation_id="diagnostic", text="Return a direct_response JSON outcome confirming readiness.",
+            local_only=True,
+        )
+        outcome, provider, fallback = await self.generate(request, [])
+        return {
+            "provider": provider, "fallback": fallback, "outcome_kind": outcome.kind,
+            "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+            "structured_output_valid": outcome.kind in {"direct_response", "clarification", "refusal", "tool_call"},
+            "side_effects": False, "private_data_used": False,
+        }
+
+    def _record_failure(self, provider: str, detail: str) -> None:
+        self._last_failure[provider] = datetime.now(timezone.utc)
+        self._last_error[provider] = detail[:200]

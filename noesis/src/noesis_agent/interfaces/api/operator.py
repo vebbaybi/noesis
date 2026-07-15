@@ -41,6 +41,14 @@ class OperatorConfigUpdate(BaseModel):
     confirm: bool = False
 
 
+class ReconciliationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tenant_id: str | None = None
+    repair: bool = False
+    delete_orphans: bool = False
+    confirm: bool = False
+
+
 def _safe_configuration() -> dict:
     try:
         overrides = json.loads(settings.discord_observation_overrides_raw or "{}")
@@ -117,7 +125,50 @@ def operator_status(request: Request) -> dict:
         ],
         "runtime_identity": runtime_identity(),
         "memory_diagnostics": get_container().memory.diagnostics(),
+        "intelligence_stack": health.get("intelligence_stack", {}),
+        "readiness": health.get("readiness", {}),
     }
+
+
+@router.post("/operator/providers/local/diagnose", include_in_schema=False)
+async def diagnose_local_provider(request: Request) -> dict[str, object]:
+    _require_local(request)
+    return await get_container().hybrid_llm.diagnose_local()
+
+
+@router.post("/operator/redis/diagnose", include_in_schema=False)
+async def diagnose_redis(request: Request) -> dict[str, object]:
+    _require_local(request)
+    return await get_container().idempotency.validate_service()
+
+
+@router.get("/operator/index/reconciliation", include_in_schema=False)
+async def reconciliation_preview(request: Request, tenant_id: str | None = None) -> dict[str, object]:
+    _require_local(request)
+    report = await get_container().memory_index.reconcile(tenant_id)
+    return report.model_dump(mode="json")
+
+
+@router.post("/operator/index/reconciliation", include_in_schema=False)
+async def reconcile_index(request: Request, action: ReconciliationRequest) -> dict[str, object]:
+    _require_local(request)
+    if (action.repair or action.delete_orphans) and not action.confirm:
+        raise HTTPException(status_code=409, detail="Confirm index mutations before applying them.")
+    report = await get_container().memory_index.reconcile(
+        action.tenant_id, repair=action.repair, delete_orphans=action.delete_orphans,
+    )
+    return report.model_dump(mode="json")
+
+
+@router.get("/operator/components", include_in_schema=False)
+def inspect_persistent_components(request: Request) -> dict[str, object]:
+    _require_local(request)
+    components = get_container().components.pending()
+    return {"pending": len(components), "items": [{
+        "component_id": item.component_id, "type": item.component_type.value,
+        "tenant_id": item.tenant_id, "operation": item.operation,
+        "expires_at": item.expires_at.isoformat(), "state": item.state.value,
+    } for item in components]}
 
 
 @router.post("/operator/memory/hygiene", include_in_schema=False)

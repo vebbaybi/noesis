@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=30.0, ge=1.0, le=180.0, alias="NOESIS_LLM_TIMEOUT_SECONDS")
     intelligence_pipeline_enabled: bool = Field(default=True, alias="NOESIS_INTELLIGENCE_PIPELINE_ENABLED")
     local_llm_enabled: bool = Field(default=True, alias="NOESIS_LOCAL_LLM_ENABLED")
+    local_llm_required: bool = Field(default=False, alias="NOESIS_LOCAL_LLM_REQUIRED")
     local_llm_model: str = Field(default="openai/local-model", alias="NOESIS_LOCAL_LLM_MODEL")
     local_llm_base_url: str = Field(default="http://127.0.0.1:11434/v1", alias="NOESIS_LOCAL_LLM_BASE_URL")
     external_llm_enabled: bool = Field(default=False, alias="NOESIS_EXTERNAL_LLM_ENABLED")
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
                                                  alias="NOESIS_LLM_CIRCUIT_COOLDOWN_SECONDS")
 
     rag_enabled: bool = Field(default=False, alias="NOESIS_RAG_ENABLED")
+    rag_required: bool = Field(default=False, alias="NOESIS_RAG_REQUIRED")
     qdrant_url: str = Field(default="http://127.0.0.1:6333", alias="NOESIS_QDRANT_URL")
     qdrant_collection: str = Field(default="noesis_memory_v1", alias="NOESIS_QDRANT_COLLECTION")
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", alias="NOESIS_EMBEDDING_MODEL")
@@ -81,10 +83,17 @@ class Settings(BaseSettings):
     embedding_concurrency: int = Field(default=2, ge=1, le=16, alias="NOESIS_EMBEDDING_CONCURRENCY")
 
     moderation_stage_two_enabled: bool = Field(default=False, alias="NOESIS_MODERATION_STAGE_TWO_ENABLED")
+    moderation_stage_two_required: bool = Field(default=False, alias="NOESIS_MODERATION_STAGE_TWO_REQUIRED")
     moderation_fail_closed: bool = Field(default=False, alias="NOESIS_MODERATION_FAIL_CLOSED")
     moderation_device: str = Field(default="cpu", alias="NOESIS_MODERATION_DEVICE")
+    moderation_model: str = Field(default="original", alias="NOESIS_MODERATION_MODEL")
+    moderation_warmup: bool = Field(default=False, alias="NOESIS_MODERATION_WARMUP")
+    moderation_inference_timeout_seconds: float = Field(default=10.0, ge=0.1, le=120.0,
+                                                        alias="NOESIS_MODERATION_INFERENCE_TIMEOUT_SECONDS")
+    moderation_queue_size: int = Field(default=16, ge=1, le=256, alias="NOESIS_MODERATION_QUEUE_SIZE")
 
     redis_enabled: bool = Field(default=False, alias="NOESIS_REDIS_ENABLED")
+    redis_required: bool = Field(default=False, alias="NOESIS_REDIS_REQUIRED")
     redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="NOESIS_REDIS_URL")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -350,6 +359,16 @@ class Settings(BaseSettings):
         if self.redis_enabled and not self.redis_url:
             issues.append(SettingsIssue(key="NOESIS_REDIS_URL", severity="error",
                                         message="Redis is enabled but Redis URL is empty."))
+        for required, enabled, key, label in (
+            (self.local_llm_required, self.local_llm_enabled, "NOESIS_LOCAL_LLM_ENABLED", "Local LLM"),
+            (self.rag_required, self.rag_enabled, "NOESIS_RAG_ENABLED", "RAG"),
+            (self.moderation_stage_two_required, self.moderation_stage_two_enabled,
+             "NOESIS_MODERATION_STAGE_TWO_ENABLED", "Deep moderation"),
+            (self.redis_required, self.redis_enabled, "NOESIS_REDIS_ENABLED", "Redis"),
+        ):
+            if required and not enabled:
+                issues.append(SettingsIssue(key=key, severity="error",
+                                            message=f"{label} is mandatory but disabled."))
 
         if self.enable_elka and not self.elka_base_url:
             issues.append(

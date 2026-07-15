@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -70,6 +70,20 @@ def health() -> dict:
     container = get_container()
     health_payload = container.is_healthy()
     return {"status": "ok", "service": "noesis-agent", **health_payload}
+
+
+@app.get("/live")
+def liveness() -> dict[str, str]:
+    return {"status": "alive", "service": "noesis-agent"}
+
+
+@app.get("/ready")
+def readiness(response: Response) -> dict[str, object]:
+    payload = get_container().is_healthy()["readiness"]
+    if payload["state"] != "ready":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"status": payload["state"], "service": "noesis-agent",
+            "mandatory_failures": payload["mandatory_failures"]}
 
 
 @app.get("/state")

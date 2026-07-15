@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from uuid import uuid4
 from typing import Any, Awaitable, Callable
 
 import discord
@@ -10,6 +11,8 @@ from noesis_agent.infrastructure.config.settings import settings
 from noesis_agent.integrations.discord.authorization import authorize_discord_message
 from noesis_agent.shared.errors import ConfigurationError, handle_noesis_error
 from noesis_agent.shared.noesislogger import get_noesis_logger
+from noesis_agent.application.components import PersistentComponentService
+from noesis_agent.integrations.discord.components import MemoryCorrectionModal, PersistentActionView
 
 
 logger = get_noesis_logger(__name__)
@@ -19,7 +22,8 @@ MentionCallback = Callable[[Any, Any], Awaitable[Any]]
 
 class NoesisDiscordBot(discord.Bot):
     def __init__(self, command_callback: CommandCallback, live_agent_getter: Callable[[], Any] | None = None,
-                 mention_callback: MentionCallback | None = None) -> None:
+                 mention_callback: MentionCallback | None = None,
+                 component_service: PersistentComponentService | None = None) -> None:
         intents = discord.Intents.default()
         intents.guilds = True
         intents.messages = True
@@ -30,8 +34,22 @@ class NoesisDiscordBot(discord.Bot):
         self.command_callback = command_callback
         self.live_agent_getter = live_agent_getter
         self.mention_callback = mention_callback
+        self.component_service = component_service
         self._commands_registered = False
+        self._persistent_view_count = 0
+        self._register_persistent_views()
         self._register_commands()
+
+    def _register_persistent_views(self) -> None:
+        if self.component_service is None:
+            return
+        for component in self.component_service.pending():
+            self.add_view(PersistentActionView(component, self.component_service))
+            self._persistent_view_count += 1
+
+    @property
+    def persistent_view_count(self) -> int:
+        return self._persistent_view_count
 
     def _slash_kwargs(self, *, name: str, description: str) -> dict[str, object]:
         kwargs: dict[str, object] = {"name": name, "description": description}
@@ -201,6 +219,19 @@ class NoesisDiscordBot(discord.Bot):
         @self.slash_command(**self._slash_kwargs(name="noesis_status", description="Show NOESIS runtime status"))
         async def status(ctx: discord.ApplicationContext) -> None:
             await self._respond(ctx, "NOESIS is online. Use /noesis_solo to join the configured voice channel.")
+
+        @self.slash_command(**self._slash_kwargs(
+            name="noesis_memory_correct", description="Submit a memory correction for operator review"
+        ))
+        async def memory_correct(ctx: discord.ApplicationContext) -> None:
+            if not await self._ensure_allowed_channel(ctx):
+                return
+            tenant_id = str(getattr(ctx, "guild_id", "") or "direct-message")
+            user_id = str(getattr(getattr(ctx, "author", None), "id", "anonymous"))
+            await ctx.send_modal(MemoryCorrectionModal(
+                self.command_callback, tenant_id=tenant_id, user_id=user_id,
+                correlation_id=uuid4().hex,
+            ))
 
         self._commands_registered = True
 
