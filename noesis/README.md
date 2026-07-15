@@ -1,5 +1,13 @@
 # Noesis Agent
 
+Noesis now has a canonical local-first intelligence path for live text events. It applies inbound and
+outbound moderation, tenant-isolated semantic retrieval, structured LLM outcomes, allowlisted tools,
+idempotency, and explicit degraded health states. The base install stays lightweight; use
+`.[rag,local-llm,coordination]`, `.[moderation]`, or `.[audio]` only for enabled capabilities.
+
+See [AI stack](docs/AI_STACK.md), [RAG and memory](docs/RAG_AND_MEMORY.md),
+[moderation](docs/MODERATION.md), and [deployment](docs/DEPLOYMENT.md).
+
 Noesis is an experimental Python agent/control plane for local session workflows, host responses, and community mention handling. It is not production-ready.
 
 ## Verified locally

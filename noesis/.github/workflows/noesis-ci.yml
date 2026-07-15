@@ -10,6 +10,15 @@ concurrency:
   group: noesis-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  base-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install -e .
+      - run: python -m pip check
+      - run: python -c "from noesis_agent.runtime.container import ServiceContainer; print(ServiceContainer().is_healthy()['intelligence_stack'])"
   validate:
     name: Validate (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -43,6 +52,22 @@ jobs:
         run: python -m pytest -p pytest_asyncio.plugin -q
       - name: Run architecture rules separately
         run: python -m pytest -p pytest_asyncio.plugin -q tests/test_architecture_boundaries.py tests/test_foundation_architecture.py
+      - name: Intelligence stack quality
+        if: matrix.python-version == '3.12'
+        run: |
+          ruff check src/noesis_agent/domain/contracts/intelligence.py src/noesis_agent/application/intelligence src/noesis_agent/cognition/tools.py src/noesis_agent/capabilities/moderation/pipeline.py src/noesis_agent/integrations/llm/hybrid.py src/noesis_agent/infrastructure/coordination src/noesis_agent/infrastructure/retrieval tests/test_intelligence_stack.py
+          mypy --ignore-missing-imports src/noesis_agent/domain/contracts/intelligence.py src/noesis_agent/application/intelligence src/noesis_agent/cognition/tools.py src/noesis_agent/capabilities/moderation/pipeline.py src/noesis_agent/integrations/llm/hybrid.py src/noesis_agent/infrastructure/coordination src/noesis_agent/infrastructure/retrieval
+  intelligence-extras:
+    runs-on: ubuntu-latest
+    env: {PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install -e ".[dev,rag,local-llm,coordination]"
+      - run: python -m pip check
+      - run: python -c "import fastembed, litellm, qdrant_client, redis"
+      - run: python -m pytest -p pytest_asyncio.plugin -q tests/test_intelligence_stack.py
       - name: Smoke-test API health endpoint
         run: |
           python - <<'PY'

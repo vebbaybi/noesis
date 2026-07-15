@@ -62,6 +62,30 @@ class Settings(BaseSettings):
     feature_flags_raw: str = Field(default="", alias="NOESIS_FEATURE_FLAGS")
     cognition_provider: Literal["auto", "local", "elka"] = Field(default="auto", alias="NOESIS_COGNITION_PROVIDER")
     llm_timeout_seconds: float = Field(default=30.0, ge=1.0, le=180.0, alias="NOESIS_LLM_TIMEOUT_SECONDS")
+    intelligence_pipeline_enabled: bool = Field(default=True, alias="NOESIS_INTELLIGENCE_PIPELINE_ENABLED")
+    local_llm_enabled: bool = Field(default=True, alias="NOESIS_LOCAL_LLM_ENABLED")
+    local_llm_model: str = Field(default="openai/local-model", alias="NOESIS_LOCAL_LLM_MODEL")
+    local_llm_base_url: str = Field(default="http://127.0.0.1:11434/v1", alias="NOESIS_LOCAL_LLM_BASE_URL")
+    external_llm_enabled: bool = Field(default=False, alias="NOESIS_EXTERNAL_LLM_ENABLED")
+    external_llm_model: str = Field(default="openai/gpt-4o-mini", alias="NOESIS_EXTERNAL_LLM_MODEL")
+    llm_max_attempts: int = Field(default=2, ge=1, le=5, alias="NOESIS_LLM_MAX_ATTEMPTS")
+    llm_concurrency: int = Field(default=8, ge=1, le=64, alias="NOESIS_LLM_CONCURRENCY")
+    llm_circuit_cooldown_seconds: float = Field(default=30.0, ge=1.0, le=600.0,
+                                                 alias="NOESIS_LLM_CIRCUIT_COOLDOWN_SECONDS")
+
+    rag_enabled: bool = Field(default=False, alias="NOESIS_RAG_ENABLED")
+    qdrant_url: str = Field(default="http://127.0.0.1:6333", alias="NOESIS_QDRANT_URL")
+    qdrant_collection: str = Field(default="noesis_memory_v1", alias="NOESIS_QDRANT_COLLECTION")
+    embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", alias="NOESIS_EMBEDDING_MODEL")
+    embedding_dimension: int = Field(default=384, ge=32, le=8192, alias="NOESIS_EMBEDDING_DIMENSION")
+    embedding_concurrency: int = Field(default=2, ge=1, le=16, alias="NOESIS_EMBEDDING_CONCURRENCY")
+
+    moderation_stage_two_enabled: bool = Field(default=False, alias="NOESIS_MODERATION_STAGE_TWO_ENABLED")
+    moderation_fail_closed: bool = Field(default=False, alias="NOESIS_MODERATION_FAIL_CLOSED")
+    moderation_device: str = Field(default="cpu", alias="NOESIS_MODERATION_DEVICE")
+
+    redis_enabled: bool = Field(default=False, alias="NOESIS_REDIS_ENABLED")
+    redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="NOESIS_REDIS_URL")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     enable_elka: bool = Field(default=False, alias="NOESIS_ENABLE_ELKA")
@@ -314,6 +338,18 @@ class Settings(BaseSettings):
                     message="The ELKA cognition provider was selected but ELKA is not enabled.",
                 )
             )
+
+        if self.external_llm_enabled and not self.openai_api_key:
+            issues.append(SettingsIssue(
+                key="OPENAI_API_KEY", severity="error" if self.env == "production" else "warning",
+                message="External LLM fallback is enabled but OPENAI_API_KEY is missing.",
+            ))
+        if self.rag_enabled and not self.qdrant_url:
+            issues.append(SettingsIssue(key="NOESIS_QDRANT_URL", severity="error",
+                                        message="RAG is enabled but Qdrant URL is empty."))
+        if self.redis_enabled and not self.redis_url:
+            issues.append(SettingsIssue(key="NOESIS_REDIS_URL", severity="error",
+                                        message="Redis is enabled but Redis URL is empty."))
 
         if self.enable_elka and not self.elka_base_url:
             issues.append(

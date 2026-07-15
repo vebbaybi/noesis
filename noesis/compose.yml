@@ -1,0 +1,41 @@
+services:
+  noesis:
+    build: .
+    env_file: [.env]
+    environment:
+      NOESIS_HOST: 0.0.0.0
+      NOESIS_PORT: 8000
+      NOESIS_QDRANT_URL: http://qdrant:6333
+      NOESIS_REDIS_URL: redis://redis:6379/0
+      NOESIS_LOCAL_LLM_BASE_URL: http://ollama:11434/v1
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["noesis-data:/app/.noesis_data"]
+    depends_on:
+      qdrant: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [noesis]
+  qdrant:
+    image: qdrant/qdrant:v1.14.1
+    volumes: ["qdrant-data:/qdrant/storage"]
+    healthcheck: {test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"], interval: 10s, timeout: 3s, retries: 10}
+    restart: unless-stopped
+    networks: [noesis]
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 10s, timeout: 3s, retries: 10}
+    restart: unless-stopped
+    networks: [noesis]
+  ollama:
+    image: ollama/ollama:0.9.6
+    profiles: [local-model]
+    volumes: ["ollama-models:/root/.ollama"]
+    restart: unless-stopped
+    networks: [noesis]
+networks:
+  noesis: {internal: true}
+volumes:
+  noesis-data:
+  qdrant-data:
+  ollama-models:

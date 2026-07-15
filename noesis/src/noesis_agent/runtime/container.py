@@ -38,6 +38,12 @@ class ServiceContainer:
         from noesis_agent.infrastructure.persistence.json_store import JsonStore
         from noesis_agent.integrations.discord.tools import DiscordContextTool
         from noesis_agent.cognition.capabilities import CapabilityRegistry
+        from noesis_agent.application.intelligence.pipeline import IntelligencePipeline
+        from noesis_agent.capabilities.moderation.pipeline import DetoxifyModerator, TwoStageModeration
+        from noesis_agent.cognition.tools import ToolRegistry
+        from noesis_agent.infrastructure.coordination.idempotency import RedisIdempotencyStore
+        from noesis_agent.infrastructure.retrieval.semantic_index import IndexConfig, SemanticIndex
+        from noesis_agent.integrations.llm.hybrid import HybridLLMRouter, ProviderConfig
 
         self.store = JsonStore(settings.data_dir)
 
@@ -50,11 +56,40 @@ class ServiceContainer:
         self.x_client = XClient()
         self.cognition = CognitionProviderRouter.from_settings(self.openai, settings)
 
+        providers = [ProviderConfig(
+            name="local", model=settings.local_llm_model, api_base=settings.local_llm_base_url,
+            local=True, enabled=settings.local_llm_enabled, timeout_seconds=settings.llm_timeout_seconds,
+        )]
+        providers.append(ProviderConfig(
+            name="openai", model=settings.external_llm_model, api_key=settings.openai_api_key,
+            local=False, enabled=settings.external_llm_enabled, timeout_seconds=settings.llm_timeout_seconds,
+        ))
+        self.hybrid_llm = HybridLLMRouter(
+            providers, max_attempts=settings.llm_max_attempts,
+            cooldown_seconds=settings.llm_circuit_cooldown_seconds,
+            concurrency=settings.llm_concurrency,
+        )
+        toxicity = DetoxifyModerator(device=settings.moderation_device) \
+            if settings.moderation_stage_two_enabled else None
+        self.safety = TwoStageModeration(toxicity=toxicity, fail_closed=settings.moderation_fail_closed)
+        self.semantic_index = SemanticIndex(IndexConfig(
+            url=settings.qdrant_url, collection=settings.qdrant_collection,
+            model=settings.embedding_model, dimension=settings.embedding_dimension,
+            timeout_seconds=settings.memory_retrieval_timeout_seconds,
+        ), enabled=settings.rag_enabled, concurrency=settings.embedding_concurrency)
+        self.idempotency = RedisIdempotencyStore(settings.redis_url if settings.redis_enabled else "")
+        self.tools = ToolRegistry()
+        self.intelligence = IntelligencePipeline(
+            moderation=self.safety, retrieval=self.semantic_index, model=self.hybrid_llm,
+            idempotency=self.idempotency, tools=self.tools,
+        )
+
         self.memory = MemoryService(settings.data_dir)
         self.mentions = MentionService(self.openai, noesis_name=settings.noesis_name,
                                        autonomous_memory=self.memory.autonomous if settings.autonomous_memory_enabled else None,
                                        observation_mode=settings.memory_observation_mode,
-                                       capability_registry=self.capabilities)
+                                       capability_registry=self.capabilities,
+                                       intelligence_pipeline=self.intelligence if settings.intelligence_pipeline_enabled else None)
         self.mentions.ambient_response_enabled = settings.ambient_response_enabled
         self.mentions.moderation_analysis_enabled = settings.moderation_analysis_enabled
         self.mention_dispatcher = MentionDispatcher(
@@ -184,7 +219,20 @@ class ServiceContainer:
             "feature_flags": settings.feature_flags.as_dict(),
             "cognition_engine": self.cognition_engine.capability_report(),
             "cognition": [status.model_dump(mode="json") for status in self.cognition.statuses()],
+            "intelligence_stack": {
+                "providers": [item.model_dump(mode="json") for item in self.hybrid_llm.health()],
+                "rag": self.semantic_index.health().model_dump(mode="json"),
+                "moderation": self.safety.health().model_dump(mode="json"),
+                "redis": self.idempotency.health().model_dump(mode="json"),
+            },
             "live_agent_ready": settings.enable_live_agent,
             "output_channels": [channel.value for channel in self.local_output.capabilities()]
             + [channel.value for channel in self.discord_output.capabilities()],
         }
+
+    async def start_intelligence(self) -> None:
+        await self.semantic_index.initialize()
+
+    async def close_intelligence(self) -> None:
+        await self.semantic_index.close()
+        await self.idempotency.close()

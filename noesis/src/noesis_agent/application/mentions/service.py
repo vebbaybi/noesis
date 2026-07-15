@@ -16,7 +16,7 @@ class MentionService:
     def __init__(self, openai_service, *, noesis_name: str = "Noesis", duplicate_limit: int = 1000,
                  local_nlp: LocalNLP | None = None, autonomous_memory=None,
                  observation_mode: str = "mentions_only", intervention_policy=None,
-                 moderation_classifier=None, capability_registry=None) -> None:
+                 moderation_classifier=None, capability_registry=None, intelligence_pipeline=None) -> None:
         self.openai = openai_service
         self.noesis_name = noesis_name
         self.duplicate_limit = duplicate_limit
@@ -27,6 +27,7 @@ class MentionService:
         self.intervention_policy = intervention_policy or InterventionPolicy()
         self.moderation_classifier = moderation_classifier or LocalModerationClassifier()
         self.capability_registry = capability_registry
+        self.intelligence_pipeline = intelligence_pipeline
         self.ambient_response_enabled = False
         self.moderation_analysis_enabled = True
         self.metrics = {"messages_observed": 0, "messages_ignored": 0, "mentions_processed": 0,
@@ -195,6 +196,28 @@ class MentionService:
             event.metadata.get("recent_context") or
             event.metadata.get("capability_route", {}).get("matches")
         )
+        if self.intelligence_pipeline is not None and not dry_run:
+            from noesis_agent.domain.contracts.intelligence import DirectResponse, IntelligenceRequest
+
+            tenant_id = str(event.metadata.get("guild_id") or event.conversation_id or event.channel_id)
+            intelligence = await self.intelligence_pipeline.process(IntelligenceRequest(
+                event_id=event.event_id, tenant_id=tenant_id,
+                user_id=str(event.user_id or "anonymous"),
+                conversation_id=str(event.conversation_id or event.channel_id), text=event.text,
+                authorized_capabilities=frozenset(event.metadata.get("authorized_capabilities", [])),
+                local_only=bool(event.metadata.get("local_only", False)),
+            ))
+            if isinstance(intelligence.outcome, DirectResponse):
+                text = intelligence.outcome.text
+            else:
+                text = str(getattr(intelligence.outcome, "question",
+                                   getattr(intelligence.outcome, "reason", fallback)))
+            responder = intelligence.provider
+            result = self._result(event, "responded", True, intent, text=text, responder=responder,
+                                  reason="canonical_intelligence_pipeline")
+            result.metadata["intelligence"] = intelligence.model_dump(mode="json")
+            return self._finish(result, event, memory_result, moderation, memories,
+                                provider_reason="canonical_intelligence_pipeline")
         if self.openai.is_enabled() and not local_answer_available:
             try:
                 generated = await self.openai.generate_text(

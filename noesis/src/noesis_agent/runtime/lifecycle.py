@@ -66,6 +66,10 @@ class ApplicationLifecycle:
     async def start(self) -> None:
         self._validate_environment()
         self._install_signal_handlers()
+        await self.background_manager.container.start_intelligence()
+        self.shutdown_manager.register_shutdown_handler(
+            self.background_manager.container.close_intelligence
+        )
 
         identity = runtime_identity()
         identity["memory_hygiene_scan"] = self.background_manager.container.memory.diagnostics().get("last_hygiene_scan")

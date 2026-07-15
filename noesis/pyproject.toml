@@ -42,9 +42,26 @@ audio = [
 dev = [
   "build>=1.2,<2.0",
   "pytest>=8.0,<9.0",
-  "pytest-asyncio>=0.23,<1.0"
+  "pytest-asyncio>=0.23,<1.0",
+  "mypy>=1.11,<2.0",
+  "ruff>=0.6,<1.0"
 ]
+discord = ["py-cord[voice]>=2.7.0,<3.0.0"]
+rag = [
+  "fastembed>=0.7,<1.0",
+  "qdrant-client>=1.14,<2.0"
+]
+moderation = ["detoxify>=0.5.2,<1.0"]
+local-llm = ["litellm>=1.74.15,<1.75"]
+coordination = ["redis>=5.2,<9.0"]
+observability = ["prometheus-client>=0.21,<1.0"]
 full = [
+  "litellm>=1.74.15,<1.75",
+  "fastembed>=0.7,<1.0",
+  "qdrant-client>=1.14,<2.0",
+  "detoxify>=0.5.2,<1.0",
+  "redis>=5.2,<9.0",
+  "prometheus-client>=0.21,<1.0",
   "faster-whisper>=1.0.3",
   "numpy>=1.26.4",
   "pyannote.audio>=3.1.1",
@@ -52,6 +69,11 @@ full = [
   "soundfile>=0.12.1,<1.0",
   "sounddevice>=0.4.6",
   "webrtcvad>=2.0.10"
+]
+gpu = [
+  "faster-whisper>=1.0.3",
+  "detoxify>=0.5.2,<1.0",
+  "pyannote.audio>=3.1.1"
 ]
 
 [project.scripts]
