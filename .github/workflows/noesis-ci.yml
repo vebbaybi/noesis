@@ -4,14 +4,14 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, "noesis-*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: noesis-ci-${{ github.workflow }}-${{ github.ref }}
+  group: noesis-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:

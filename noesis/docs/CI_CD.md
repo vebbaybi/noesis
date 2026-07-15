@@ -4,9 +4,10 @@ Noesis separates merge validation from release preparation. Neither workflow dep
 
 ## Merge CI
 
-`.github/workflows/noesis-ci.yml` runs for pull requests to `main`, pushes to `main` and
-`noesis-*` branches, and manual dispatches. Read-only repository permissions and concurrency
-cancellation are set at workflow level.
+`.github/workflows/noesis-ci.yml` runs for pull requests to `main`, pushes to `main`, and manual
+dispatches. Feature branches are deliberately not push triggers: an open pull request receives one
+validation run rather than duplicate `push` and `pull_request` runs. Read-only repository
+permissions and concurrency cancellation are set at workflow level.
 
 The job graph is:
 
