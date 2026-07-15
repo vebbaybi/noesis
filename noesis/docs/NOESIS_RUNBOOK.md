@@ -8,7 +8,7 @@ From the `noesis` directory:
 python -m venv .venv
 python -m pip install -e ".[dev]"
 copy .env.example .env
-python -m uvicorn noesis_agent.api.app:app --host 127.0.0.1 --port 8000
+python -m uvicorn noesis_agent.interfaces.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 On macOS/Linux use `cp` instead of `copy`. Local boot and tests require no credentials. Keep integrations disabled until their credentials are configured. Optional audio support is installed with `.[audio]`; it may also require OS audio drivers and model access.
@@ -18,7 +18,7 @@ On macOS/Linux use `cp` instead of `copy`. Local boot and tests require no crede
 ```bash
 python -m compileall -q src
 python -m pytest -q
-python -c "from noesis_agent.api.app import app; print(app.title)"
+python -c "from noesis_agent.interfaces.api.app import app; print(app.title)"
 ```
 
 Health: `GET http://127.0.0.1:8000/health`.
@@ -27,7 +27,7 @@ Run the complete local runtime with `python -m noesis_agent.runner`. This single
 
 Operator storage status uses only a label and configured/available/writable booleans; it does not return the host data path. Scoped SQLite memory initializes under the configured data directory and supports lexical retrieval without embeddings or external providers.
 
-Running `python -m uvicorn noesis_agent.api.app:app --reload` is a UI/API development mode only; it does not start Discord or other runner-managed background services. `0.0.0.0` is a server bind address, not a browser URL—use `127.0.0.1` or `localhost` in the browser.
+Running `python -m uvicorn noesis_agent.interfaces.api.app:app --reload` is a UI/API development mode only; it does not start Discord or other runner-managed background services. `0.0.0.0` is a server bind address, not a browser URL—use `127.0.0.1` or `localhost` in the browser.
 
 Dry-run mention test:
 
@@ -69,3 +69,22 @@ Live Discord behavior remains unverified until this checklist succeeds. X live d
 X: enable with `NOESIS_ENABLE_X=true`; writes require `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET`. `X_BEARER_TOKEN` supports applicable reads. `X_HANDLE` identifies the account. Keep cross-post disabled until a dry run is reviewed.
 
 Never commit `.env`. Live Discord/X/OpenAI behavior is credential- and permission-dependent and is not exercised by the local test suite.
+# Live Discord cognition release gate
+
+Do not claim a Discord cognition fix from unit tests alone. Before reporting a live fix:
+
+1. Open `GET /operator/status` locally and record `git_branch`, `git_commit`,
+   `cognition_build_id`, `source_file_path`, `python_executable`, `env_file_path`, and
+   `memory_database_path`.
+2. Confirm the branch and commit match the intended workspace.
+3. Confirm the `.env` and SQLite paths are the files intended for the staging runner.
+4. Run `POST /operator/memory/hygiene` and record the found/downgraded counts.
+5. Stop every older Noesis Python process and restart `python -m noesis_agent.runner`.
+6. Confirm startup logs contain `live-cognition-reality-fix-001` and each Discord
+   processing log includes the same build ID.
+7. Retest the exact staging messages for direct abuse, criticism, moderation complaint,
+   compound creator/member questions, and corrupted package memory.
+8. Save the observed replies as screenshots or sanitized logs.
+
+If any identity value differs, or the actual Discord replies are not observed after the
+restart, report the work as partially complete and investigate runtime parity.

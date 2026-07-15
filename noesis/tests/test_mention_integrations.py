@@ -6,12 +6,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
-from noesis_agent.config.settings import Settings
-from noesis_agent.models.mentions import MentionEvent
-from noesis_agent.platforms.mention_normalizers import normalize_discord_message, normalize_x_mention
-from noesis_agent.services.mention_dispatcher import MentionDispatcher
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.interfaces.api.app import app
+from noesis_agent.infrastructure.config.settings import Settings
+from noesis_agent.domain.contracts.mentions import MentionEvent
+from noesis_agent.integrations.mention_normalizers import normalize_discord_message, normalize_x_mention
+from noesis_agent.application.mentions.dispatcher import MentionDispatcher
+from noesis_agent.application.mentions.service import MentionService
 
 
 class DisabledProvider:

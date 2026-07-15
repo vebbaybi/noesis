@@ -32,8 +32,8 @@ class InterventionDecision:
 class LocalModerationClassifier:
     _SECRET = re.compile(r"(?i)(api[_ -]?key|token|password|secret)\s*[:=]|\b(?:sk-|ghp_|xox[baprs]-)[A-Za-z0-9_-]{8,}")
     _THREAT = re.compile(r"(?i)\b(?:kill|hurt|attack|doxx?)\s+(?:you|him|her|them)\b")
-    _TARGETED = re.compile(r"(?i)\b(?:you|he|she|they)\s+(?:are|is)\s+(?:an?\s+)?(?:idiot|stupid|trash|worthless)\b")
-    _PROFANITY = re.compile(r"(?i)\b(?:fuck|shit|damn)\b")
+    _TARGETED = re.compile(r"(?i)(?:\b(?:you|he|she|they)\s+(?:are|is)\s+(?:an?\s+)?(?:idiot|stupid|trash|worthless|useless|(?:complete\s+)?failure|cunt)\b|\b(?:you\b.{0,80}|being\s+(?:an?\s+)?)cunt\b|\bfuck\s+you\b)")
+    _PROFANITY = re.compile(r"(?i)\b(?:fuck(?:ing|ed|er|s)?|shit(?:ty)?|damn|cunt)\b")
     _SCAM = re.compile(r"(?i)\b(?:guaranteed returns?|send .* receive|double your|seed phrase|wallet verification)\b")
     _HATE = re.compile(r"(?i)\b(?:all|those)\s+(?:women|men|muslims|jews|christians|gay|trans|black|white)\s+(?:are|should)\b")
     _SEXUAL = re.compile(r"(?i)\b(?:send nudes|sexual favors?|sleep with me|show me your body)\b")

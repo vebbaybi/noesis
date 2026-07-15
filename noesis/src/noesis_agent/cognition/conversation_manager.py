@@ -5,10 +5,11 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, Iterable, List
 
-from noesis_agent.audio.transcription import TranscriptSegment
+from noesis_agent.integrations.audio.transcription import TranscriptSegment
+from noesis_agent.cognition.nlu.analysis import LocalNLPEngine
 from noesis_agent.cognition.topic_graph import TopicGraph
-from noesis_agent.models.schemas import TranscriptEvent, TranscriptEventType
-from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.domain.entities.transcript import TranscriptEvent, TranscriptEventType
+from noesis_agent.shared.noesislogger import NoesisLogger
 
 
 @dataclass
@@ -27,6 +28,7 @@ class ConversationManager:
         self.window = window
         self.events: Deque[TranscriptEvent] = deque(maxlen=window)
         self.topic_graph = TopicGraph()
+        self.nlp = LocalNLPEngine()
         self.active_speakers: Deque[str] = deque(maxlen=6)
         self.lock = asyncio.Lock()
 
@@ -62,8 +64,8 @@ class ConversationManager:
             return events
 
     def _update_topics(self, content: str) -> None:
-        # Simple heuristic: use first 6 words as a topic key
-        topic = " ".join(content.split()[:6]).lower()
+        analysis = self.nlp.analyze(content)
+        topic = " ".join(analysis.keywords[:4]) or "general conversation"
         previous = self.topic_graph.hottest_topics(1)[0] if self.topic_graph.graph else None
         self.topic_graph.add_transition(previous, topic)
 

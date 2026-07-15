@@ -4,9 +4,9 @@ import ast
 import logging
 from pathlib import Path
 
-from noesis_agent.config.settings import Settings, SettingsIssue, settings
-from noesis_agent.core.lifecycle import ApplicationLifecycle
-from noesis_agent.utils.logging import sanitize_log_extra
+from noesis_agent.infrastructure.config.settings import Settings, SettingsIssue, settings
+from noesis_agent.runtime.lifecycle import ApplicationLifecycle
+from noesis_agent.shared.logging import sanitize_log_extra
 
 
 RESERVED = {

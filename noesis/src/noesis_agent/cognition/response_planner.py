@@ -5,7 +5,7 @@ from typing import Protocol
 
 from noesis_agent.cognition.decision_engine import Decision
 from noesis_agent.cognition.conversation_manager import ConversationManager
-from noesis_agent.models.schemas import HostReplyRequest
+from noesis_agent.domain.contracts.persona import HostReplyRequest
 
 
 @dataclass

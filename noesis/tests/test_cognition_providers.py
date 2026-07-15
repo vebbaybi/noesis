@@ -5,8 +5,8 @@ import asyncio
 import pytest
 
 from noesis_agent.cognition.providers import CognitionProviderRouter, FutureELKAProvider, LocalLLMProvider
-from noesis_agent.models.cognition import CognitionRequest
-from noesis_agent.utils.errors import ConfigurationError
+from noesis_agent.domain.contracts.cognition import CognitionRequest
+from noesis_agent.shared.errors import ConfigurationError
 
 
 class DisabledOpenAI:

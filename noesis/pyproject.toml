@@ -23,6 +23,9 @@ dependencies = [
   "tldextract>=5.1.2",
   "psutil>=5.9.8",
   "feedgen>=1.0.0",
+  "numpy>=1.26.4",
+  "scikit-learn>=1.5,<2.0",
+  "rapidfuzz>=3.9,<4.0",
   "PyYAML>=6.0,<7.0"
 ]
 
@@ -31,6 +34,8 @@ audio = [
   "faster-whisper>=1.0.3",
   "numpy>=1.26.4",
   "pyannote.audio>=3.1.1",
+  "noisereduce>=3.0.3,<4.0",
+  "soundfile>=0.12.1,<1.0",
   "sounddevice>=0.4.6",
   "webrtcvad>=2.0.10"
 ]
@@ -43,9 +48,14 @@ full = [
   "faster-whisper>=1.0.3",
   "numpy>=1.26.4",
   "pyannote.audio>=3.1.1",
+  "noisereduce>=3.0.3,<4.0",
+  "soundfile>=0.12.1,<1.0",
   "sounddevice>=0.4.6",
   "webrtcvad>=2.0.10"
 ]
+
+[project.scripts]
+noesis = "noesis_agent.runtime.bootstrap:run"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

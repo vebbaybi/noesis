@@ -52,9 +52,14 @@ class MemoryRecord:
 class ScopedMemoryStore:
     SCHEMA_VERSION = 3
     _SENSITIVE = re.compile(r"(?i)\b(api[_ -]?key|token|password|secret|authorization)\b")
+    _SEARCH_STOP = {"noesis", "this", "that", "what", "when", "where", "which", "who",
+                    "why", "how", "does", "have", "with", "version", "right", "current",
+                    "remember", "using", "used", "here", "there", "is", "are", "the", "for"}
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
+        self.hygiene_actions = 0
+        self.hygiene_last_scan: dict[str, object] | None = None
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._initialize()
@@ -138,7 +143,16 @@ class ScopedMemoryStore:
                             subject, predicate, object_value)
 
     def search(self, query: str, scope: MemoryScope, *, limit: int = 5) -> list[MemoryRecord]:
-        terms = [term for term in re.findall(r"[a-z0-9]{2,}", query.lower())][:8]
+        terms = [term for term in re.findall(r"[a-z0-9]{2,}", query.lower())
+                 if term not in self._SEARCH_STOP][:12]
+        lowered = query.lower()
+        topic = "release" if re.search(r"\b(release|launch|milestone|deadline|date)\b", lowered) else \
+                "database" if re.search(r"\b(database|mysql|postgres(?:ql)?|sqlite|storage)\b", lowered) else \
+                "task" if re.search(r"\b(task|assigned|assignee|done|complete|blocker)\b", lowered) else None
+        if topic and topic not in terms:
+            terms.append(topic)
+        if re.search(r"\bx\b", lowered) and re.search(r"integration|ready|verified|live", lowered):
+            terms.extend(term for term in ("verification", "credentials") if term not in terms)
         if not terms:
             return []
         clauses = ["platform=?", "deleted_at IS NULL", "superseded_by IS NULL",
@@ -151,12 +165,28 @@ class ScopedMemoryStore:
                 values.append(value)
             else:
                 clauses.append(f"{column} IS NULL")
-        clauses.append("(" + " OR ".join("LOWER(content) LIKE ?" for _ in terms) + ")")
+        searchable = "LOWER(content || ' ' || COALESCE(subject,'') || ' ' || COALESCE(predicate,'') || ' ' || COALESCE(object_value,''))"
+        clauses.append("(" + " OR ".join(f"{searchable} LIKE ?" for _ in terms) + ")")
         values.extend(f"%{term}%" for term in terms)
-        values.append(max(1, min(limit, 20)))
-        sql = f"SELECT * FROM memories WHERE {' AND '.join(clauses)} ORDER BY importance DESC, created_at DESC LIMIT ?"
+        values.append(100)
+        sql = f"SELECT * FROM memories WHERE {' AND '.join(clauses)} ORDER BY created_at DESC LIMIT ?"
         with self._lock, self._connect() as db:
             rows = db.execute(sql, values).fetchall()
+            changed = self._downgrade_question_decisions(db, rows)
+            if changed:
+                self.hygiene_actions += changed
+                rows = db.execute(sql, values).fetchall()
+            def relevance(row: sqlite3.Row) -> tuple[float, float, str]:
+                haystack = " ".join(str(row[key] or "") for key in
+                                    ("content", "subject", "predicate", "object_value")).lower()
+                matched = sum(1 for term in terms if term in haystack)
+                topic_match = 1.0 if topic and (topic in haystack or
+                    (topic == "release" and row["subject"] == "release") or
+                    (topic == "database" and row["subject"] == "database")) else 0.0
+                unresolved_penalty = -.35 if row["memory_type"] == "question" and "?" not in query else 0.0
+                return (topic_match * 3 + matched / max(1, len(terms)) + unresolved_penalty,
+                        float(row["importance"]), row["created_at"])
+            rows = sorted(rows, key=relevance, reverse=True)[:max(1, min(limit, 20))]
             if rows:
                 db.executemany("UPDATE memories SET last_retrieved_at=? WHERE memory_id=?",
                                [(datetime.now(timezone.utc).isoformat(), row["memory_id"]) for row in rows])
@@ -192,11 +222,15 @@ class ScopedMemoryStore:
     def latest_active(self, scope: MemoryScope, *, types: tuple[str, ...]) -> MemoryRecord | None:
         placeholders = ",".join("?" for _ in types)
         with self._lock, self._connect() as db:
-            row = db.execute(f"""SELECT * FROM memories WHERE platform=? AND guild_id IS ?
+            rows = db.execute(f"""SELECT * FROM memories WHERE platform=? AND guild_id IS ?
                 AND channel_id IS ? AND conversation_id IS ? AND deleted_at IS NULL
                 AND superseded_by IS NULL AND memory_type IN ({placeholders})
-                ORDER BY created_at DESC LIMIT 1""",
-                (scope.platform, scope.guild_id, scope.channel_id, scope.conversation_id, *types)).fetchone()
+                ORDER BY created_at DESC LIMIT 20""",
+                (scope.platform, scope.guild_id, scope.channel_id, scope.conversation_id, *types)).fetchall()
+            changed = self._downgrade_question_decisions(db, rows)
+            self.hygiene_actions += changed
+            row = next((item for item in rows if not (
+                item["memory_type"] == "decision" and self._question_shaped(item["content"]))), None)
         return self._row(row) if row else None
 
     def reinforce(self, memory_id: str, scope: MemoryScope, *, confidence: float) -> MemoryRecord | None:
@@ -224,7 +258,43 @@ class ScopedMemoryStore:
             count = db.execute("SELECT COUNT(*) FROM memories WHERE deleted_at IS NULL").fetchone()[0]
             integrity = db.execute("PRAGMA quick_check").fetchone()[0]
         return {"backend": "sqlite", "schema_version": self.SCHEMA_VERSION,
-                "available": integrity == "ok", "record_count": count, "lexical_search": True}
+                "available": integrity == "ok", "record_count": count, "lexical_search": True,
+                "memory_hygiene_actions": self.hygiene_actions,
+                "memory_hygiene": self.memory_diagnostics()}
+
+    def run_hygiene(self) -> dict[str, object]:
+        """Scan the real persisted store and downgrade invalid decision-shaped questions."""
+        with self._lock, self._connect() as db:
+            rows = db.execute("""SELECT * FROM memories WHERE deleted_at IS NULL
+                AND superseded_by IS NULL AND memory_type='decision'""").fetchall()
+            found = sum(self._question_shaped(row["content"]) for row in rows)
+            downgraded = self._downgrade_question_decisions(db, rows)
+            self.hygiene_actions += downgraded
+        self.hygiene_last_scan = {
+            "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "question_shaped_decisions_found": found,
+            "downgraded": downgraded,
+        }
+        return dict(self.hygiene_last_scan)
+
+    def memory_diagnostics(self) -> dict[str, object]:
+        with self._lock, self._connect() as db:
+            row = db.execute("""SELECT COUNT(memory_id) AS total,
+                SUM(CASE WHEN memory_type='decision' THEN 1 ELSE 0 END) AS decisions,
+                SUM(CASE WHEN predicate='legacy_question_downgraded' THEN 1 ELSE 0 END) AS downgraded,
+                MAX(created_at) AS last_write FROM memories WHERE deleted_at IS NULL""").fetchone()
+            active_decisions = db.execute("""SELECT content FROM memories WHERE deleted_at IS NULL
+                AND superseded_by IS NULL AND memory_type='decision'""").fetchall()
+        return {
+            "database_path": str(self.path.resolve()),
+            "total_memory_count": int(row["total"] or 0),
+            "decision_memory_count": int(row["decisions"] or 0),
+            "question_shaped_decision_count": sum(self._question_shaped(item["content"])
+                                                   for item in active_decisions),
+            "hygiene_downgraded_count": int(row["downgraded"] or 0),
+            "last_memory_write_at": row["last_write"],
+            "last_hygiene_scan": self.hygiene_last_scan,
+        }
 
     def operator_summary(self, *, preview_limit: int = 6) -> dict[str, object]:
         """Return bounded, non-sensitive memory statistics for the local operator UI."""
@@ -255,6 +325,7 @@ class ScopedMemoryStore:
         return {
             "active": active, "superseded": superseded, "expired": expired, "deleted": deleted,
             "by_type": by_type,
+            "memory_hygiene_actions": self.hygiene_actions,
             "recent": [{
                 "id": row["memory_id"][:8], "type": row["memory_type"],
                 "summary": self._safe_preview(row["content"]), "platform": row["platform"],
@@ -288,6 +359,23 @@ class ScopedMemoryStore:
                             row["last_retrieved_at"], json.loads(row["score_breakdown"] or "{}"),
                             row["storage_explanation"], row["subject"], row["predicate"],
                             row["object_value"])
+
+    @staticmethod
+    def _question_shaped(content: str) -> bool:
+        value = " ".join(str(content or "").lower().split())
+        return ("?" in value or bool(re.search(
+            r"(?:\b(?:is|are|do|does|did|can|could|should|would|will)\s+(?:we|it|this|that)\b|"
+            r"\b(?:right|correct)\s*[?.!]*$|^@?noesis\b.*\b(?:is|are|can|should|do)\b)", value)))
+
+    def _downgrade_question_decisions(self, db: sqlite3.Connection, rows) -> int:
+        corrupt = [row for row in rows if row["memory_type"] == "decision" and
+                   self._question_shaped(row["content"])]
+        for row in corrupt:
+            explanation = "Legacy question-shaped decision downgraded to open question; provenance preserved."
+            db.execute("""UPDATE memories SET memory_type='question', task_status='open',
+                predicate='legacy_question_downgraded', storage_explanation=? WHERE memory_id=?""",
+                       (explanation, row["memory_id"]))
+        return len(corrupt)
 
 
 __all__ = ["MemoryRecord", "MemoryScope", "ScopedMemoryStore"]

@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
+from noesis_agent.interfaces.api.app import app
 from noesis_agent.cognition.intervention import InterventionPolicy, LocalModerationClassifier
 from noesis_agent.memory.async_executor import AsyncMemoryExecutor, MemoryQueueFull
 from noesis_agent.memory.autonomous import AutonomousMemoryService
 from noesis_agent.memory.sqlite_memory import MemoryScope, ScopedMemoryStore
-from noesis_agent.models.mentions import MentionEvent
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.domain.contracts.mentions import MentionEvent
+from noesis_agent.application.mentions.service import MentionService
 
 
 class Disabled:
@@ -71,7 +71,7 @@ def test_moderation_distinguishes_profanity_targeting_and_secrets() -> None:
 
 
 def test_scope_specific_observation_mode_precedence(monkeypatch) -> None:
-    from noesis_agent.config.settings import settings
+    from noesis_agent.infrastructure.config.settings import settings
     monkeypatch.setattr(settings, "memory_observation_mode", "mentions_only")
     monkeypatch.setattr(settings, "discord_observation_overrides_raw",
                         '{"guild:g":"observe_authorized","channel:c":"observe_and_remember","thread:t":"observe_and_moderate"}')

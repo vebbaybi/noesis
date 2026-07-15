@@ -3,16 +3,16 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from noesis_agent.content import build_local_research_brief, build_local_session_summary, build_summary_thread
-from noesis_agent.models.guest import Guest
-from noesis_agent.models.platforms import XPostRequest
-from noesis_agent.models.schemas import HostReplyResponse
-from noesis_agent.models.session import SessionCreateRequest
-from noesis_agent.models.transcript import TranscriptEvent
-from noesis_agent.services.analytics_service import AnalyticsService
-from noesis_agent.services.research_service import ResearchService
-from noesis_agent.store.guest_store import GuestStore
-from noesis_agent.store.json_store import JsonStore
+from noesis_agent.capabilities.content import build_local_research_brief, build_local_session_summary, build_summary_thread
+from noesis_agent.domain.entities.guest import Guest
+from noesis_agent.domain.contracts.platforms import XPostRequest
+from noesis_agent.domain.contracts.persona import HostReplyResponse
+from noesis_agent.domain.contracts.session import SessionCreateRequest
+from noesis_agent.domain.entities.transcript import TranscriptEvent
+from noesis_agent.infrastructure.observability.service import AnalyticsService
+from noesis_agent.cognition.knowledge.service import ResearchService
+from noesis_agent.infrastructure.persistence.guest_store import GuestStore
+from noesis_agent.infrastructure.persistence.json_store import JsonStore
 
 
 class DummyOpenAI:

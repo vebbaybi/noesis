@@ -1,9 +1,9 @@
 import asyncio
 
-from noesis_agent.clients.discord_bot import NoesisDiscordBot
-from noesis_agent.commands.handler import CommandHandler
-from noesis_agent.config.settings import settings
-from noesis_agent.services.container import get_container
+from noesis_agent.integrations.discord.client import NoesisDiscordBot
+from noesis_agent.interfaces.commands.handler import CommandHandler
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.runtime.container import get_container
 
 
 def test_discord_text_prompt_parser_requires_dm_mention_or_prefix() -> None:

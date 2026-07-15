@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from noesis_agent.models.guest import Guest
-from noesis_agent.store.guest_store import GuestStore
+from noesis_agent.domain.entities.guest import Guest
+from noesis_agent.infrastructure.persistence.guest_store import GuestStore
 
 
 class GuestMemory:

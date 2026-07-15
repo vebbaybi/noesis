@@ -6,7 +6,7 @@ from typing import Iterable, Optional
 
 import networkx as nx
 
-from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.shared.noesislogger import NoesisLogger
 
 
 @dataclass

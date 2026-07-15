@@ -69,20 +69,20 @@ def _cap(capability_id: str, name: str, platforms: tuple[str, ...], state: Imple
 
 BASE_CAPABILITIES = (
     _cap("discord.guild.owner", "Current Discord server owner", ("discord",), "implemented_live_validation_required",
-         handlers=("noesis_agent.platforms.discord_tools.DiscordContextTool",), tools=("discord.current_context",)),
+         handlers=("noesis_agent.integrations.discord.tools.DiscordContextTool",), tools=("discord.current_context",)),
     _cap("discord.guild.member_count", "Discord server member count", ("discord",), "implemented_live_validation_required",
-         handlers=("noesis_agent.platforms.discord_tools.DiscordContextTool",), tools=("discord.current_context",)),
+         handlers=("noesis_agent.integrations.discord.tools.DiscordContextTool",), tools=("discord.current_context",)),
     _cap("discord.channel.visible_members", "Discord channel-visible members", ("discord",), "partial",
-         handlers=("noesis_agent.platforms.discord_tools.DiscordContextTool",), tools=("discord.current_context",),
+         handlers=("noesis_agent.integrations.discord.tools.DiscordContextTool",), tools=("discord.current_context",),
          limitation="Requires a complete member cache and permission-overwrite evaluation."),
     _cap("discord.channel.context", "Discord channel context", ("discord",), "implemented_live_validation_required",
-         handlers=("noesis_agent.platforms.discord_tools.DiscordContextTool",), tools=("discord.current_context",)),
+         handlers=("noesis_agent.integrations.discord.tools.DiscordContextTool",), tools=("discord.current_context",)),
     _cap("discord.thread.context", "Discord thread context and routing", ("discord",), "implemented_tested",
-         handlers=("noesis_agent.platforms.discord_authorization.authorize_discord_message",), tools=("discord.current_context",)),
+         handlers=("noesis_agent.integrations.discord.authorization.authorize_discord_message",), tools=("discord.current_context",)),
     _cap("discord.thread.summary", "Discord thread summarization", ("discord",), "partial",
          limitation="Bounded authorized history retrieval is not implemented."),
     _cap("discord.member.context", "Discord requesting-member context", ("discord",), "partial",
-         handlers=("noesis_agent.platforms.discord_tools.DiscordContextTool",)),
+         handlers=("noesis_agent.integrations.discord.tools.DiscordContextTool",)),
     _cap("discord.support.triage", "Discord community support triage", ("discord",), "partial"),
     _cap("discord.moderation.advisory", "Advisory Discord moderation", ("discord",), "partial",
          handlers=("noesis_agent.cognition.intervention.LocalModerationClassifier",), memory=("moderation_record",)),
@@ -100,7 +100,7 @@ BASE_CAPABILITIES = (
          handlers=("noesis_agent.memory.autonomous.CandidateExtractor",), memory=("preference",)),
     _cap("memory.relationships", "People/project/task relationships", ("platform_neutral",), "planned"),
     _cap("community.explanation", "Community explanation and clarification", ("platform_neutral",), "partial",
-         handlers=("noesis_agent.cognition.local_nlp.LocalNLP",)),
+         handlers=("noesis_agent.cognition.nlu.interpreter.LocalNLP",)),
     _cap("community.onboarding", "Community onboarding and navigation", ("platform_neutral",), "planned"),
     _cap("community.social", "Community social and cultural assistance", ("platform_neutral",), "planned"),
     _cap("community.translation", "Translation and accessibility", ("platform_neutral",), "planned"),
@@ -108,19 +108,19 @@ BASE_CAPABILITIES = (
     _cap("research.evidence", "Evidence-backed research", ("platform_neutral",), "planned"),
     _cap("web3.intelligence", "Web3 and governance intelligence", ("platform_neutral",), "planned"),
     _cap("x.conversation", "X conversation intelligence", ("x",), "blocked_credentials",
-         handlers=("noesis_agent.models.platform_events.XEventContract",), limitation="Live X credentials are unavailable."),
+         handlers=("noesis_agent.domain.entities.platform_events.XEventContract",), limitation="Live X credentials are unavailable."),
     _cap("x.content", "X content assistance", ("x",), "blocked_credentials",
          limitation="Live X credentials are unavailable."),
     _cap("x.risk", "X scam and risk signals", ("x",), "blocked_credentials",
          limitation="Live X credentials are unavailable."),
     _cap("spaces.live.copilot", "X Spaces live copilot", ("spaces",), "blocked_platform",
-         handlers=("noesis_agent.models.platform_events.SpaceEventContract",), limitation="No verified live Spaces ingestion API is connected."),
+         handlers=("noesis_agent.domain.entities.platform_events.SpaceEventContract",), limitation="No verified live Spaces ingestion API is connected."),
     _cap("spaces.post_show", "X Spaces post-show artifacts", ("spaces",), "partial"),
     _cap("cross_platform.continuity", "Cross-platform project continuity", ("cross_platform",), "planned"),
     _cap("operator.runtime", "Local operator runtime visibility", ("local",), "implemented_tested",
-         handlers=("noesis_agent.api.operator.operator_status",)),
+         handlers=("noesis_agent.interfaces.api.operator.operator_status",)),
     _cap("operator.cognition", "Local dry-run cognition inspection", ("local",), "implemented_tested",
-         handlers=("noesis_agent.api.operator.inspect_cognition",)),
+         handlers=("noesis_agent.interfaces.api.operator.inspect_cognition",)),
 )
 
 
@@ -193,27 +193,34 @@ class CapabilityRegistry:
 
     def route(self, *, platform: str, text: str, intent: str) -> dict:
         lower = text.lower()
-        semantic_id = None
-        limitation = None
+        semantic_matches: list[tuple[str, str | None]] = []
         if platform == "discord":
             if re.search(r"\b(who (?:owns|runs)|server owner|guild owner|who created)\b", lower):
-                semantic_id = "discord.guild.owner"
-                if "created" in lower:
-                    limitation = "Discord does not expose reliable original-creator history."
-            elif re.search(r"\b(how many|member count).*(?:see|access|channel)\b", lower):
-                semantic_id = "discord.channel.visible_members"
-            elif re.search(r"\b(how many|member count).*(?:server|guild|people are here)\b", lower):
-                semantic_id = "discord.guild.member_count"
-            elif re.search(r"\b(what|which) channel|channel is this\b", lower):
-                semantic_id = "discord.channel.context"
-            elif re.search(r"\b(is this|current) thread|thread is this\b", lower):
-                semantic_id = "discord.thread.context"
-        if semantic_id:
-            item = next(item for item in self.capabilities if item.capability_id == semantic_id)
+                semantic_matches.append(("discord.guild.owner",
+                    "Discord does not expose reliable original-creator history." if "created" in lower else None))
+            if re.search(r"\b(how many|member count).*(?:see|access|channel)\b", lower):
+                semantic_matches.append(("discord.channel.visible_members", None))
+            elif (re.search(r"\b(how many members|member count|how many people are here)\b", lower)
+                  or re.search(r"\bhow many\b.*\b(?:server|guild)\b", lower)):
+                semantic_matches.append(("discord.guild.member_count", None))
+            if re.search(r"\b(what|which) channel|channel is this\b", lower):
+                semantic_matches.append(("discord.channel.context", None))
+            if re.search(r"\b(is this|current) (?:a )?thread|thread is this\b", lower):
+                semantic_matches.append(("discord.thread.context", None))
+            if re.search(r"\b(cursing|harass|abusive|abuse|spam|scam|leaked? (?:a )?token|suspicious link)\b", lower):
+                semantic_matches.append(("discord.moderation.advisory", None))
+        if semantic_matches:
+            unique = list(dict.fromkeys(capability_id for capability_id, _ in semantic_matches))
+            limitations = {capability_id: limitation for capability_id, limitation in semantic_matches}
+            items = [next(item for item in self.capabilities if item.capability_id == capability_id)
+                     for capability_id in unique]
             return {"matches": [{"capability_id": item.capability_id, "confidence": .98,
                                   "state": item.implementation_state,
-                                  "limitation": limitation or (item.known_limitations[0] if item.known_limitations else None)}],
-                    "clarification_required": False, "tool_plan": list(item.required_tools),
+                                  "limitation": limitations[item.capability_id] or
+                                                (item.known_limitations[0] if item.known_limitations else None)}
+                                 for item in items],
+                    "clarification_required": False,
+                    "tool_plan": list(dict.fromkeys(tool for item in items for tool in item.required_tools)),
                     "platform": platform}
         tokens = set(re.findall(r"[a-z0-9]{3,}", f"{intent} {text}".lower()))
         ranked = []

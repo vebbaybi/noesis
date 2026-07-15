@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from noesis_agent.clients.discord_bot import NoesisDiscordBot
-from noesis_agent.config.settings import settings
-from noesis_agent.platforms.discord_authorization import authorize_discord_message
-from noesis_agent.platforms.mention_normalizers import normalize_discord_message
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.integrations.discord.client import NoesisDiscordBot
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.integrations.discord.authorization import authorize_discord_message
+from noesis_agent.integrations.mention_normalizers import normalize_discord_message
+from noesis_agent.application.mentions.service import MentionService
 
 
 class FakeThread:

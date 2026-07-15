@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from noesis_agent.config import Settings, list_runtime_profiles, load_feature_flags, settings
-from noesis_agent.services.prompts import PromptConfig
+from noesis_agent.infrastructure.config import Settings, list_runtime_profiles, load_feature_flags, settings
+from noesis_agent.cognition.prompts.service import PromptConfig
 
 
 def test_settings_expose_runtime_profile_and_prompt_paths() -> None:

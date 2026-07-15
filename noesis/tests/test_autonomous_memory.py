@@ -4,8 +4,8 @@ import pytest
 
 from noesis_agent.memory.autonomous import AutonomousMemoryService
 from noesis_agent.memory.sqlite_memory import MemoryScope, ScopedMemoryStore
-from noesis_agent.models.mentions import MentionEvent
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.domain.contracts.mentions import MentionEvent
+from noesis_agent.application.mentions.service import MentionService
 
 
 class DisabledProvider:

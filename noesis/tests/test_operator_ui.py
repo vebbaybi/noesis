@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
+from noesis_agent.interfaces.api.app import app
 
 
 def test_operator_page_and_asset_load_without_credentials() -> None:
@@ -20,7 +20,7 @@ def test_operator_page_and_asset_load_without_credentials() -> None:
 
 
 def test_operator_status_is_safe_and_does_not_expose_secret_values(monkeypatch) -> None:
-    from noesis_agent.config.settings import settings
+    from noesis_agent.infrastructure.config.settings import settings
     monkeypatch.setattr(settings, "discord_bot_token", "discord-secret-sentinel")
     monkeypatch.setattr(settings, "openai_api_key", "openai-secret-sentinel")
     payload = TestClient(app).get("/operator/status").text
@@ -28,7 +28,7 @@ def test_operator_status_is_safe_and_does_not_expose_secret_values(monkeypatch) 
     assert "openai-secret-sentinel" not in payload
     assert '"discord_token_present":true' in payload
     assert '"data_path"' not in payload
-    assert str(settings.data_dir).replace("\\", "\\\\") not in payload
+    assert str((settings.data_dir / "memory" / "noesis_memory.sqlite3").resolve()).replace("\\", "\\\\") in payload
 
 
 def test_operator_cognition_inspector_uses_local_nlp_without_provider() -> None:
@@ -67,8 +67,8 @@ def test_operator_page_uses_plain_language_not_raw_status_json() -> None:
 
 
 def test_operator_configuration_requires_confirmation_and_keeps_safe_audit(monkeypatch) -> None:
-    from noesis_agent.api import operator
-    from noesis_agent.config.settings import settings
+    from noesis_agent.interfaces.api import operator
+    from noesis_agent.infrastructure.config.settings import settings
 
     monkeypatch.setattr(settings, "memory_observation_mode", "mentions_only")
     monkeypatch.setattr(settings, "ambient_response_enabled", False)
@@ -94,7 +94,7 @@ def test_operator_configuration_requires_confirmation_and_keeps_safe_audit(monke
 
 
 def test_operator_configuration_rejects_unsafe_combination_and_rolls_back(monkeypatch) -> None:
-    from noesis_agent.config.settings import settings
+    from noesis_agent.infrastructure.config.settings import settings
 
     monkeypatch.setattr(settings, "memory_observation_mode", "mentions_only")
     monkeypatch.setattr(settings, "ambient_response_enabled", False)
@@ -112,3 +112,17 @@ def test_operator_ambient_status_is_bounded_and_safe() -> None:
     assert {"observation_mode", "ambient_response_enabled", "moderation_analysis_enabled",
             "queue", "recent_moderation", "false_positive_feedback"} <= payload.keys()
     assert len(payload["recent_moderation"]) <= 20
+
+
+def test_operator_reports_runtime_identity_and_can_force_memory_hygiene() -> None:
+    client = TestClient(app)
+    status = client.get("/operator/status").json()
+    assert status["runtime_identity"]["cognition_build_id"] == "live-cognition-reality-fix-001"
+    assert status["runtime_identity"]["git_branch"]
+    assert status["runtime_identity"]["source_file_path"].endswith("noesis_agent\\__init__.py") or \
+           status["runtime_identity"]["source_file_path"].endswith("noesis_agent/__init__.py")
+    assert "discord_bot_token" not in str(status).lower()
+    hygiene = client.post("/operator/memory/hygiene")
+    assert hygiene.status_code == 200
+    assert hygiene.json()["completed"] is True
+    assert {"question_shaped_decisions_found", "downgraded"} <= hygiene.json()["result"].keys()

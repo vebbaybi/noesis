@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import List
 
-from noesis_agent.models.schemas import TranscriptEvent
-from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.domain.entities.transcript import TranscriptEvent
+from noesis_agent.shared.noesislogger import NoesisLogger
 
 
 class EpisodicMemory:

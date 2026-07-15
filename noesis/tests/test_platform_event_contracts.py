@@ -1,8 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from noesis_agent.models.platform_events import SpaceEventContract, XEventContract
-from noesis_agent.platforms.mention_normalizers import normalize_x_mention
+from noesis_agent.domain.entities.platform_events import SpaceEventContract, XEventContract
+from noesis_agent.integrations.mention_normalizers import normalize_x_mention
 
 
 def test_x_contract_and_normalizer_distinguish_reply_quote_and_conversation() -> None:
