@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
-from noesis_agent.config.settings import settings
-from noesis_agent.models.cognition import CognitionRequest, CognitionResponse
-from noesis_agent.models.live import (
+from noesis_agent.interfaces.api.app import app
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.domain.contracts.cognition import CognitionRequest, CognitionResponse
+from noesis_agent.domain.contracts.live import (
     HostOutput,
     HostTurnRequest,
     LiveEventType,
@@ -16,11 +16,11 @@ from noesis_agent.models.live import (
     OutputChannel,
     OutputStatus,
 )
-from noesis_agent.models.session import SessionCreateRequest
-from noesis_agent.services.container import get_container
-from noesis_agent.services.host_runtime_service import HostRuntimeService
-from noesis_agent.services.output_adapters import DiscordOutputAdapter, LocalTextOutputAdapter
-from noesis_agent.services.output_router import OutputRouter
+from noesis_agent.domain.contracts.session import SessionCreateRequest
+from noesis_agent.runtime.container import get_container
+from noesis_agent.application.conversation.runtime import HostRuntimeService
+from noesis_agent.application.output.adapters import DiscordOutputAdapter, LocalTextOutputAdapter
+from noesis_agent.application.output.router import OutputRouter
 
 
 def _disable_external_integrations(tmp_path, monkeypatch) -> None:

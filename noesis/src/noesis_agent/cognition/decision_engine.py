@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 
 from noesis_agent.cognition.conversation_manager import ConversationManager
-from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.shared.noesislogger import NoesisLogger
 
 
 @dataclass

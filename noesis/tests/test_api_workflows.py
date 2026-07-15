@@ -1,9 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
-from noesis_agent.config.settings import settings
-from noesis_agent.services.container import get_container
+from noesis_agent.interfaces.api.app import app
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.runtime.container import get_container
 
 
 @pytest.fixture()

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
+from noesis_agent.interfaces.api.app import app
 
 
 def test_health() -> None:

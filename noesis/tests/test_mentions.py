@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 import pytest
 
-from noesis_agent.api.app import app
-from noesis_agent.clients.openai_client import OpenAIService
-from noesis_agent.models.mentions import MentionEvent, MentionIntent
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.interfaces.api.app import app
+from noesis_agent.integrations.llm.openai import OpenAIService
+from noesis_agent.domain.contracts.mentions import MentionEvent, MentionIntent
+from noesis_agent.application.mentions.service import MentionService
 
 
 def test_dry_run_direct_question_uses_honest_fallback() -> None:
@@ -42,7 +42,10 @@ async def test_intents_and_safe_edge_cases(monkeypatch) -> None:
     casual = await service.handle(MentionEvent(event_id="casual", text="hey @Noesis"))
     assert casual.status == "ignored"
     hostile = await service.handle(MentionEvent(event_id="hostile", text="@Noesis you are stupid"))
-    assert hostile.status == "needs_clarification"
+    assert hostile.status == "dry_run"
+    assert hostile.intent is MentionIntent.HOSTILE
+    assert "frustrated" in hostile.text.lower()
+    assert "clear question or task" not in hostile.text.lower()
     empty = await service.handle(MentionEvent(event_id="empty", text="", mentioned=True))
     assert empty.status == "needs_clarification"
 

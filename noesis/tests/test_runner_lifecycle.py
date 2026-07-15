@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
-from noesis_agent.config.settings import settings
-from noesis_agent.core.lifecycle import ApplicationLifecycle
-from noesis_agent.services.container import get_container
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.runtime.lifecycle import ApplicationLifecycle
+from noesis_agent.runtime.container import get_container
 
 
 def test_lifecycle_startup_and_shutdown_with_external_integrations_disabled(tmp_path, monkeypatch) -> None:

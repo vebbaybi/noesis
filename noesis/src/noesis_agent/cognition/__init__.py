@@ -1,3 +1,5 @@
+"""Cognitive analysis, planning, provider routing, prompts, and local fallback."""
+
 from .conversation_manager import ConversationManager
 from .topic_graph import TopicGraph
 from .decision_engine import DecisionEngine, Decision

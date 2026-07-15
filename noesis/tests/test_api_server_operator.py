@@ -1,5 +1,5 @@
-from noesis_agent.config.settings import settings
-from noesis_agent.services.api_server import APIServer
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.runtime.api_server import APIServer
 
 
 def test_operator_url_converts_bind_all_address_to_browser_address(monkeypatch) -> None:

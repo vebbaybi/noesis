@@ -4,7 +4,7 @@ Audit date: 2026-07-11. Scope: repository at branch `noesis-functional-hardening
 
 ## Structure and entry points
 
-Noesis is a Python 3.10+ package in `src/noesis_agent`. `noesis_agent.runner:main` is the process entry point; `noesis_agent.api.app:app` is the FastAPI entry point. Configuration lives in `config`, domain models in `models`, orchestration in `services`/`core`, persistence in `store`, and platform code in `clients`, `platforms`, and `monitors`. Tests are in `tests`. A minimal credential-free GitHub Actions workflow compiles the source and runs the test suite.
+Noesis is a Python 3.10+ package in `src/noesis_agent`. `noesis_agent.runtime.bootstrap:run` is the process entry point; `noesis_agent.interfaces.api.app:app` is the FastAPI entry point. Configuration lives in `config`, domain models in `models`, orchestration in `services`/`core`, persistence in `store`, and platform code in `clients`, `platforms`, and `monitors`. Tests are in `tests`. A minimal credential-free GitHub Actions workflow compiles the source and runs the test suite.
 
 The API includes health/state, planning, session lifecycle, transcript, host-turn, summary/artifact, X publish, realtime configuration, and local mention dry-run routes. Runtime profiles are development, test, staging, and production; unknown profile names deliberately fall back to development, while an invalid `NOESIS_ENV` fails validation clearly.
 

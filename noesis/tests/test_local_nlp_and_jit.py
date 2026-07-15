@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-from noesis_agent.cognition.local_nlp import LocalNLP
-from noesis_agent.models.mentions import MentionEvent
-from noesis_agent.platforms.discord_tools import DiscordContextTool
+from noesis_agent.cognition.nlu.interpreter import LocalNLP
+from noesis_agent.domain.contracts.mentions import MentionEvent
+from noesis_agent.integrations.discord.tools import DiscordContextTool
 
 
 def test_local_nlp_returns_confidence_topics_serious_mode_and_entities() -> None:

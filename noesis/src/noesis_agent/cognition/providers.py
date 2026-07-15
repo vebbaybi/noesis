@@ -4,16 +4,16 @@ from typing import Protocol
 
 import httpx
 
-from noesis_agent.clients.openai_client import OpenAIService
-from noesis_agent.config.settings import Settings, settings
-from noesis_agent.models.cognition import (
+from noesis_agent.integrations.llm.openai import OpenAIService
+from noesis_agent.infrastructure.config.settings import Settings, settings
+from noesis_agent.domain.contracts.cognition import (
     CognitionProviderStatus,
     CognitionRequest,
     CognitionResponse,
     ProviderCapability,
 )
-from noesis_agent.utils.errors import ConfigurationError, NoesisError
-from noesis_agent.utils.noesislogger import NoesisLogger
+from noesis_agent.shared.errors import ConfigurationError, NoesisError
+from noesis_agent.shared.noesislogger import NoesisLogger
 
 
 class CognitionProvider(Protocol):

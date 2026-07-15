@@ -1,0 +1,10 @@
+.git
+.env
+.venv
+.noesis_data
+.noesis_logs
+.pytest_cache
+**/__pycache__
+tests
+docs
+*.pyc

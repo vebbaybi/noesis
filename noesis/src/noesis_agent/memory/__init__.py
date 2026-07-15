@@ -1,3 +1,5 @@
+"""Memory semantics, lifecycle policy, retrieval, redaction, and consolidation."""
+
 from .working_memory import WorkingMemory
 from .episodic_memory import EpisodicMemory
 from .semantic_memory import SemanticMemory
@@ -6,6 +8,7 @@ from .guest_memory import GuestMemory
 from .retrieval import Retrieval
 from .memory_indexer import MemoryIndexer
 from .memory_cleaner import MemoryCleaner
+from .service import MemoryService
 
 __all__ = [
     "WorkingMemory",
@@ -16,4 +19,5 @@ __all__ = [
     "Retrieval",
     "MemoryIndexer",
     "MemoryCleaner",
+    "MemoryService",
 ]

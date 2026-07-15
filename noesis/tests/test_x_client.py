@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from noesis_agent.clients.x_client import XClient
-from noesis_agent.config.settings import settings
-from noesis_agent.models.schemas import XPostRequest
+from noesis_agent.integrations.x.client import XClient
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.domain.contracts.platforms import XPostRequest
 
 
 class FakeResponse:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections import deque
 from typing import Deque
-from noesis_agent.utils.noesislogger import NoesisLogger
-from noesis_agent.models.schemas import TranscriptEvent
+from noesis_agent.shared.noesislogger import NoesisLogger
+from noesis_agent.domain.entities.transcript import TranscriptEvent
 
 
 class WorkingMemory:

@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from noesis_agent.config.settings import Settings, settings
-from noesis_agent.models.mentions import MentionEvent
-from noesis_agent.services.background import BackgroundServiceManager
-from noesis_agent.services.mention_dispatcher import MentionDispatcher
-from noesis_agent.services.mention_service import MentionService
+from noesis_agent.infrastructure.config.settings import Settings, settings
+from noesis_agent.domain.contracts.mentions import MentionEvent
+from noesis_agent.runtime.background import BackgroundServiceManager
+from noesis_agent.application.mentions.dispatcher import MentionDispatcher
+from noesis_agent.application.mentions.service import MentionService
 
 
 class DisabledProvider:

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from noesis_agent.models.session import SessionCreateRequest
-from noesis_agent.models.transcript import SessionTranscriptEvent
-from noesis_agent.services.memory_service import MemoryService
-from noesis_agent.services.session_service import SessionService
-from noesis_agent.services.transcript_service import TranscriptService
-from noesis_agent.store.json_store import JsonStore
+from noesis_agent.domain.contracts.session import SessionCreateRequest
+from noesis_agent.domain.entities.transcript import SessionTranscriptEvent
+from noesis_agent.memory.service import MemoryService
+from noesis_agent.application.conversation.sessions import SessionService
+from noesis_agent.application.conversation.transcripts import TranscriptService
+from noesis_agent.infrastructure.persistence.json_store import JsonStore
 
 
 def test_session_service_tracks_mode_room_state_and_speakers(tmp_path: Path) -> None:

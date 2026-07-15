@@ -5,21 +5,21 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from noesis_agent.api.app import app
-from noesis_agent.config.settings import settings
-from noesis_agent.models.live import LiveEventType, LiveSessionEventRequest
-from noesis_agent.models.runtime import HostIntent, ResponseMode, RoomState, SessionContext, SpeakerState, TopicPlan
-from noesis_agent.models.session import SessionCreateRequest
-from noesis_agent.models.transcript import TranscriptEvent
-from noesis_agent.services.container import get_container
-from noesis_agent.services.host_decision_service import HostDecisionService
-from noesis_agent.services.post_show_service import PostShowArtifactService
-from noesis_agent.services.response_mode_router import ResponseModeRouter
-from noesis_agent.services.session_service import SessionService
-from noesis_agent.services.summary_service import SummaryService
-from noesis_agent.services.topic_planning_service import TopicPlanningService
-from noesis_agent.services.transcript_service import TranscriptService
-from noesis_agent.store.json_store import JsonStore
+from noesis_agent.interfaces.api.app import app
+from noesis_agent.infrastructure.config.settings import settings
+from noesis_agent.domain.contracts.live import LiveEventType, LiveSessionEventRequest
+from noesis_agent.domain.contracts.runtime import HostIntent, ResponseMode, RoomState, SessionContext, SpeakerState, TopicPlan
+from noesis_agent.domain.contracts.session import SessionCreateRequest
+from noesis_agent.domain.entities.transcript import TranscriptEvent
+from noesis_agent.runtime.container import get_container
+from noesis_agent.application.conversation.host_decisions import HostDecisionService
+from noesis_agent.capabilities.media.post_show_service import PostShowArtifactService
+from noesis_agent.application.conversation.response_modes import ResponseModeRouter
+from noesis_agent.application.conversation.sessions import SessionService
+from noesis_agent.capabilities.content.summary_service import SummaryService
+from noesis_agent.capabilities.scheduling.topic_planning_service import TopicPlanningService
+from noesis_agent.application.conversation.transcripts import TranscriptService
+from noesis_agent.infrastructure.persistence.json_store import JsonStore
 
 
 class DisabledOpenAI:

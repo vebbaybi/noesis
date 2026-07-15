@@ -22,10 +22,11 @@ def test_every_noesis_module_imports() -> None:
 def test_lower_layers_do_not_import_service_or_entrypoint_layers() -> None:
     source_root = Path(__file__).resolve().parents[1] / "src" / "noesis_agent"
     restricted = {
-        "clients": {"noesis_agent.services", "noesis_agent.commands", "noesis_agent.api", "noesis_agent.runner"},
-        "cognition": {"noesis_agent.services", "noesis_agent.commands", "noesis_agent.api", "noesis_agent.runner"},
-        "models": {"noesis_agent.services", "noesis_agent.clients", "noesis_agent.api", "noesis_agent.runner"},
-        "config": {"noesis_agent.services", "noesis_agent.clients", "noesis_agent.api", "noesis_agent.runner"},
+        "domain": {"noesis_agent.application", "noesis_agent.cognition", "noesis_agent.memory",
+                   "noesis_agent.capabilities", "noesis_agent.interfaces", "noesis_agent.integrations",
+                   "noesis_agent.infrastructure", "noesis_agent.runtime"},
+        "application": {"noesis_agent.interfaces", "noesis_agent.integrations",
+                        "noesis_agent.infrastructure", "noesis_agent.runtime"},
     }
 
     violations: list[str] = []

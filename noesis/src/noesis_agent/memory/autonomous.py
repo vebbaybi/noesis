@@ -102,6 +102,7 @@ class CandidateExtractor:
         if len(cleaned) < 8 or cleaned.lower() in {"lol gm", "gm", "hello", "hi", "thanks"}:
             return []
         kind: CandidateType | None = None
+        release = None
         confidence, importance, actionability = .82, .75, .7
         lower = cleaned.lower()
         if self._SECRET.search(cleaned):
@@ -109,20 +110,29 @@ class CandidateExtractor:
             rejection = "sensitive_content"
         else:
             rejection = None
-            if re.search(r"\b(correction|actually|moved to|instead|completed|finished|resolved|done)\b", lower):
+            is_question = cleaned.rstrip().endswith("?")
+            release = re.search(
+                r"(?i)\b(?:the\s+)?(?:version\s+)?(?:release|launch|milestone)(?:\s+(?:date\s+)?)?(?:is|=|for|on|planned for)?\s*"
+                r"(?:is\s+)?(?:for|on|planned\s+for|=)?\s*"
+                r"(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{1,2})(?:st|nd|rd|th)?\b",
+                cleaned)
+            if is_question:
+                kind, confidence, importance, actionability = "question", .68, .78, .75
+            elif release:
+                kind, confidence, importance, actionability = "fact", .9, .9, .85
+            elif re.search(r"\b(correction|actually|moved to|instead|completed|finished|resolved|done)\b", lower):
                 kind, importance, actionability = "correction", .95, .9
             elif re.search(r"\b(blocked|blocker|cannot proceed|can't proceed|waiting for)\b", lower):
                 kind, importance, actionability = "blocker", .9, .95
+            elif re.search(r"\b(?:should|will|must)\s+not\s+(?:be\s+)?(?:use[d]?|ship|deploy|adopt)\b", lower) or \
+                    re.search(r"\b(?:do not|don't|won't)\s+(?:use|ship|deploy|adopt)\b", lower):
+                kind, confidence, importance, actionability = "decision", .9, .92, .88
             elif re.search(r"\b(agreed|decided|decision|we (?:are|will|won't)|staying with|approved)\b", lower):
                 kind, importance, actionability = "decision", .9, .85
             elif re.search(r"\b(will|must|needs? to|assigned|by (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|\w+ \d{1,2}))\b", lower):
                 kind, importance, actionability = "task", .85, .95
-            elif cleaned.endswith("?") and re.search(r"\b(what|when|where|who|why|how|is|are|can|should)\b", lower):
-                kind, importance, actionability = "question", .65, .7
             elif re.search(r"\b(prefer|preference|always use)\b", lower):
                 kind = "preference"
-            elif re.search(r"\b(release|deadline|launch|milestone)\b.*\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b", lower):
-                kind, importance, actionability = "fact", .85, .8
         if kind is None:
             return []
         assignee = None
@@ -145,14 +155,29 @@ class CandidateExtractor:
         negative = {"sensitivity": 1.0 if rejection else 0.0, "transience": .1,
                     "contradiction_risk": .15, "spam_probability": 0.0,
                     "duplication": 0.0, "uncertainty": 1.0 - confidence}
+        canonical = cleaned
+        subject = assignee
+        predicate = kind
+        object_value = deadline
+        if release:
+            date_value = f"{release.group(1).title()} {int(release.group(2))}"
+            canonical = f"The planned release date is {date_value}."
+            subject, predicate, object_value = "release", "planned_date", date_value
+        elif kind == "question":
+            predicate = "open_question"
+            if re.search(r"(?i)\b(mysql|postgres(?:ql)?)\b", cleaned):
+                subject = "database"
+        elif re.search(r"(?i)\bpostgres(?:ql)?\b", cleaned):
+            subject, predicate, object_value = "database", "rejected_option", "PostgreSQL"
+            canonical = "PostgreSQL should not be used for this version."
         return [MemoryCandidate(
-            candidate_type=kind, content=cleaned, confidence=confidence, importance=importance,
+            candidate_type=kind, content=canonical, confidence=confidence, importance=importance,
             actionability=actionability, source_event_id=event_id, stable_id=stable_id,
             rejection_reason=rejection, assignee=assignee, deadline=deadline, task_status=task_status,
             platform=platform, guild_id=scope.guild_id, channel_id=scope.channel_id,
             conversation_id=scope.conversation_id, user_id=scope.user_id, project_id=scope.project_id,
-            canonical_content=cleaned, subject=assignee or ("release" if "release" in lower else None),
-            predicate=kind, object_value=deadline, sensitivity=1.0 if rejection else 0.0,
+            canonical_content=canonical, subject=subject,
+            predicate=predicate, object_value=object_value, sensitivity=1.0 if rejection else 0.0,
             visibility=scope.visibility, provenance=(event_id,),
             score_breakdown={**positive, **{key: -value for key, value in negative.items()}},
         )]

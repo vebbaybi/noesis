@@ -1,5 +1,13 @@
 # Noesis Agent
 
+Noesis now has a canonical local-first intelligence path for live text events. It applies inbound and
+outbound moderation, tenant-isolated semantic retrieval, structured LLM outcomes, allowlisted tools,
+idempotency, and explicit degraded health states. The base install stays lightweight; use
+`.[rag,local-llm,coordination]`, `.[moderation]`, or `.[audio]` only for enabled capabilities.
+
+See [AI stack](docs/AI_STACK.md), [RAG and memory](docs/RAG_AND_MEMORY.md),
+[moderation](docs/MODERATION.md), and [deployment](docs/DEPLOYMENT.md).
+
 Noesis is an experimental Python agent/control plane for local session workflows, host responses, and community mention handling. It is not production-ready.
 
 ## Verified locally
@@ -21,7 +29,8 @@ Discord, X, and OpenAI behavior is credential-gated. The Discord runtime mention
 python -m venv .venv
 python -m pip install -e ".[dev]"
 # Copy .env.example to .env using the command appropriate for your shell.
-python -m noesis_agent.runner
+noesis
+# Compatibility command: python -m noesis_agent.runner
 ```
 
 No credentials are required for compilation, tests, health checks, or mention dry runs. External integrations are disabled by default in `.env.example`; never commit `.env`. Install `.[audio]` only on hosts that need the optional native/ML audio stack.
@@ -39,7 +48,9 @@ See the repository-grounded documentation:
 - [Runbook](docs/NOESIS_RUNBOOK.md)
 - [Roadmap seed](docs/NOESIS_ROADMAP_SEED.md)
 - [Operator GUI plan](docs/NOESIS_OPERATOR_GUI_PLAN.md)
-- [Architecture](docs/NOESIS_ARCHITECTURE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Architecture migration](docs/ARCHITECTURE_MIGRATION.md)
+- [Dependency rules](docs/DEPENDENCY_RULES.md)
 - [Local cognition](docs/NOESIS_LOCAL_COGNITION.md)
 - [Memory policy](docs/NOESIS_MEMORY_POLICY.md)
 - [JIT tools](docs/NOESIS_JIT_TOOLS.md)
